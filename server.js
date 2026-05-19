@@ -845,5 +845,6 @@ app.listen(PORT,()=>{
   const url=`http://localhost:${PORT}`;
   const cmd=process.platform==='win32'?`start "" "${url}"`:process.platform==='darwin'?`open "${url}"`:` xdg-open "${url}"`;
   exec(cmd,err=>{if(err)console.log('  Open:',url);});
+  console.log("[PlayerDB] STARTING LOAD");
   ensurePlayerDB().then(()=>setTimeout(runPoll,1500));
 });

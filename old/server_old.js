@@ -564,11 +564,15 @@ class Tracker {
       const batterId=Number(play.matchup?.batter?.id);
       const pitcherId=Number(play.matchup?.pitcher?.id);
 
-      // Pre-AB situation
+      // Pre-AB situation — use movement.start for baserunners (accurate pre-play state)
+      // play.count.outs is POST-play, so subtract outs recorded this play to get pre-AB outs
       const preFirst =runners.some(r=>r?.movement?.start==='1B');
       const preSecond=runners.some(r=>r?.movement?.start==='2B');
       const preThird =runners.some(r=>r?.movement?.start==='3B');
-      const preOuts  =play.count?.outs??0;
+      const rOut     =runners.filter(r=>r?.details?.isOut).length;
+      const bOut     =cls.ab&&!cls.isHit&&cls.type!=='BB'&&cls.type!=='HBP';
+      const outsThisPlay = rOut + (bOut ? 1 : 0);
+      const preOuts  = Math.max(0, (play.count?.outs??0) - outsThisPlay);
       const lastPitch=play.playEvents?.filter(ev=>ev.isPitch)?.slice(-1)[0];
       const finalCount=lastPitch?`${lastPitch.count?.balls??0}-${lastPitch.count?.strikes??0}`:null;
       const hitEvt=play.playEvents?.find(ev=>ev.hitData?.launchSpeed);
@@ -591,8 +595,6 @@ class Tracker {
         });
       }
       if (player.isPitcher&&map.apiId===pitcherId) {
-        const bOut=cls.ab&&!cls.isHit&&cls.type!=='BB'&&cls.type!=='HBP';
-        const rOut=runners.filter(r=>r?.details?.isOut).length;
         entries.push({
           id:`${gameId}:pit:${map.apiId}:${idx}`,ts,
           playerName:player.name,role:'pitcher',
@@ -782,8 +784,10 @@ app.get('/api/scoreboard',async(req,res)=>{
         detailedState:g.status?.detailedState,
         startTime:g.gameDate,
         awayAbbr:g.teams?.away?.team?.abbreviation??'',
+        awayId:g.teams?.away?.team?.id??null,
         awayScore:g.teams?.away?.score??0,
         homeAbbr:g.teams?.home?.team?.abbreviation??'',
+        homeId:g.teams?.home?.team?.id??null,
         homeScore:g.teams?.home?.score??0,
         inning:ls.currentInning??null,
         inningHalf:ls.inningHalf??'',
