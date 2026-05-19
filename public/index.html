@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLB Fantasy Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header id="hd">
+    <div class="hd-top">
+      <div class="brand">
+        <span class="brand-icon">⚾</span>MLB TRACKER
+      </div>
+
+      <div id="search-wrap">
+        <input type="text" id="search-input" placeholder="Search player…" autocomplete="off">
+        <div id="search-results"></div>
+      </div>
+
+      <div id="vol-wrap">
+        <span id="vol-label">🔔 60%</span>
+        <input type="range" id="vol-slider" min="0" max="1" step="0.05"
+               value="0.6" oninput="setVolume(this.value)">
+      </div>
+
+      <div id="status-wrap">
+        <div id="status-dot"></div>
+        <span id="status-txt">Connecting…</span>
+        <span id="poll-eta"></span>
+      </div>
+    </div>
+
+    <div id="mlb-scores">
+      <div id="mlb-scores-inner"><div class="sg-loading">Loading scores…</div></div>
+    </div>
+
+    <div id="today-stats">
+      <div class="ts-grid" id="ts-grid-inner"></div>
+    </div>
+  </header>
+
+  <div id="lp"></div>
+  <div id="divider"></div>
+
+  <div id="fd">
+    <div id="fd-hdr">
+      PLAY LOG
+      <span id="event-count"></span>
+    </div>
+    <div id="feed-list"></div>
+  </div>
+</div>
+
+<div id="toast-root"></div>
+
+<div id="watch-overlay">
+  <div id="watch-modal">
+    <div id="wm-header">
+      <div id="wm-game-ctx">
+        <span id="wm-game-away" class="wm-team-ctx">—</span>
+        <span class="wm-ctx-dot">·</span>
+        <span id="wm-inning-badge">—</span>
+        <span class="wm-ctx-dot">·</span>
+        <span id="wm-game-home" class="wm-team-ctx">—</span>
+      </div>
+      <button id="wm-close" onclick="closeWatch()">✕</button>
+    </div>
+
+    <div id="wm-matchup">
+      <div class="wm-side wm-batter-side">
+        <div class="wm-role-tag bat-tag">🏏 AT BAT</div>
+        <div class="wm-player-name" id="wm-batter-name">—</div>
+        <div class="wm-hand-badge" id="wm-bat-hand">—</div>
+      </div>
+      <div class="wm-vs">VS</div>
+      <div class="wm-side wm-pitcher-side">
+        <div class="wm-role-tag pit-tag">⚾ PITCHING</div>
+        <div class="wm-player-name" id="wm-pitcher-name">—</div>
+        <div class="wm-hand-badge" id="wm-pit-hand">—</div>
+      </div>
+    </div>
+
+    <div id="wm-situation">
+      <div class="wm-count-group">
+        <div class="wm-sit-label">BALLS</div>
+        <div class="wm-dots-row" id="wm-ball-dots"></div>
+      </div>
+      <div class="wm-count-group">
+        <div class="wm-sit-label">STRIKES</div>
+        <div class="wm-dots-row" id="wm-strike-dots"></div>
+      </div>
+      <div class="wm-count-group">
+        <div class="wm-sit-label">OUTS</div>
+        <div class="wm-dots-row" id="wm-out-dots"></div>
+      </div>
+      <div class="wm-sit-sep"></div>
+      <div id="wm-bases-wrap"></div>
+    </div>
+
+    <div id="wm-body">
+      <div id="zone-wrap">
+        <div id="zone-label">CATCHER'S VIEW</div>
+        <svg id="zone-svg" width="200" height="240" viewBox="0 0 200 240"></svg>
+        <div id="zone-pitch-legend"></div>
+      </div>
+      <div id="pitch-log"></div>
+    </div>
+    <div id="wm-result"></div>
+  </div>
+</div>
+
+<script>
+// ── Slot defs ────────────────────────────────────────────────────────────────
+const SLOT_DEFS=[
+  {id:'C1',  label:'C',   group:'batter', pos:['C']},
+  {id:'C2',  label:'C',   group:'batter', pos:['C']},
+  {id:'1B',  label:'1B',  group:'batter', pos:['1B']},
+  {id:'2B',  label:'2B',  group:'batter', pos:['2B']},
+  {id:'3B',  label:'3B',  group:'batter', pos:['3B']},
+  {id:'SS',  label:'SS',  group:'batter', pos:['SS']},
+  {id:'MI',  label:'MI',  group:'batter', pos:['2B','SS']},
+  {id:'CI',  label:'CI',  group:'batter', pos:['1B','3B']},
+  {id:'OF1', label:'OF',  group:'batter', pos:['OF','LF','CF','RF']},
+  {id:'OF2', label:'OF',  group:'batter', pos:['OF','LF','CF','RF']},
+  {id:'OF3', label:'OF',  group:'batter', pos:['OF','LF','CF','RF']},
+  {id:'OF4', label:'OF',  group:'batter', pos:['OF','LF','CF','RF']},
+  {id:'OF5', label:'OF',  group:'batter', pos:['OF','LF','CF','RF']},
+  {id:'UTIL',label:'UTIL',group:'batter', pos:['*']},
+  {id:'P1',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P2',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P3',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P4',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P5',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P6',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P7',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P8',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'P9',  label:'P',   group:'pitcher',pos:['SP','RP','P']},
+  {id:'BN1', label:'BN',  group:'bench',  pos:['*']},
+  {id:'BN2', label:'BN',  group:'bench',  pos:['*']},
+  {id:'BN3', label:'BN',  group:'bench',  pos:['*']},
+  {id:'BN4', label:'BN',  group:'bench',  pos:['*']},
+  {id:'BN5', label:'BN',  group:'bench',  pos:['*']},
+  {id:'BN6', label:'BN',  group:'bench',  pos:['*']},
+  {id:'BN7', label:'BN',  group:'bench',  pos:['*']},
+];
+
+const PITCH_COLORS={
+  FF:'#e84545',FT:'#f97316',SI:'#f97316',FA:'#e84545',
+  FC:'#d4a017',SL:'#3d96ff',ST:'#0bc5ea',SW:'#0bc5ea',
+  CU:'#a855f7',KC:'#a855f7',CS:'#a855f7',
+  CH:'#29d97a',FS:'#14b8a6',FO:'#14b8a6',
+  KN:'#94a3b8',EP:'#94a3b8',
+};
+function pitchColor(t){return PITCH_COLORS[t]||'#64748b'}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let state={slots:{},events:[],stats:{},liveStatus:{},activeGamePlayers:[],playerGameStates:{}};
+let lastPoll=null;
+let dragFrom=null;
+let watchGPK=null,watchTimer=null;
+let acIdx=-1,acResults=[],acTimer=null;
+
+// ── Player headshot ──────────────────────────────────────────────────────────
+function playerHeadshot(mlbId){
+  if(!mlbId) return null;
+  // Format 67 (standard facing-forward headshot) has better player coverage than silo
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${mlbId}/headshot/67/current`;
+}
+function playerHeadshotFallback(mlbId){
+  if(!mlbId) return null;
+  // Secondary fallback: content.mlb.com direct path
+  return `https://content.mlb.com/images/headshots/67/${mlbId}@2x.jpg`;
+}
+function onHeadshotError(img, mlbId){
+  const fb = playerHeadshotFallback(mlbId);
+  if(fb && img.src !== fb){ img.src = fb; }
+  else { img.remove(); }
+}
+
+// ── Audio ────────────────────────────────────────────────────────────────────
+let audioCtx=null;
+let volume=parseFloat(localStorage.getItem('mlb_vol')??.6);
+
+function initVolumeUI(){
+  const sl=document.getElementById('vol-slider');
+  sl.value=volume;
+  sl.style.setProperty('--vol-pct',(volume*100)+'%');
+  updateVolLabel();
+}
+
+function setVolume(v){
+  volume=parseFloat(v);
+  localStorage.setItem('mlb_vol',volume);
+  const sl=document.getElementById('vol-slider');
+  sl.style.setProperty('--vol-pct',(volume*100)+'%');
+  updateVolLabel();
+  if(volume>0) playSound('chime');
+}
+
+// ── Today Stats ──────────────────────────────────────────────────────────────
+function renderTodayStats(){
+  const all=Object.values(state.stats??{});
+  const agg={ab:0,h:0,r:0,hr:0,rbi:0,sb:0,k:0,outs:0,er:0,bb:0,ha:0,w:0,sv:0};
+  for(const ps of all){
+    if(ps.role==='hitter'){
+      agg.ab+=ps.ab??0; agg.h+=ps.h??0; agg.r+=ps.r??0;
+      agg.hr+=ps.hr??0; agg.rbi+=ps.rbi??0; agg.sb+=ps.sb??0;
+    } else {
+      agg.k+=ps.k??0; agg.outs+=ps.outs??0; agg.w+=ps.w??0; agg.sv+=ps.sv??0;
+      agg.er+=ps.er??0; agg.bb+=ps.bb??0; agg.ha+=ps.ha??0;
+    }
+  }
+  const ip=agg.outs/3;
+  const era=ip>0?((agg.er*9)/ip).toFixed(2):'0.00';
+  const whip=ip>0?((agg.bb+agg.ha)/ip).toFixed(2):'0.00';
+  const avg=agg.ab>0?(agg.h/agg.ab).toFixed(3).replace(/^0/,''):'.000';
+
+  // H / AB / R / HR / RBI / SB / AVG  ||  W / K / SV / ERA / WHIP
+  const batFields=[
+    {label:'H',   val:agg.h},
+    {label:'AB',  val:agg.ab},
+    {label:'R',   val:agg.r},
+    {label:'HR',  val:agg.hr},
+    {label:'RBI', val:agg.rbi},
+    {label:'SB',  val:agg.sb},
+    {label:'AVG', val:avg},
+  ];
+  const pitFields=[
+    {label:'W',   val:agg.w},
+    {label:'K',   val:agg.k},
+    {label:'SV',  val:agg.sv},
+    {label:'ERA', val:era},
+    {label:'WHIP',val:whip},
+  ];
+
+  const grid=document.getElementById('ts-grid-inner');
+  if(!grid) return;
+
+  if(!grid.children.length){
+    const batHtml=batFields.map(f=>`
+      <div class="ts-pair">
+        <span class="ts-val" id="tsv-${f.label.toLowerCase()}">${f.val}</span>
+        <span class="ts-label">${f.label}</span>
+      </div>`).join('');
+    const pitHtml=pitFields.map(f=>`
+      <div class="ts-pair">
+        <span class="ts-val" id="tsv-${f.label.toLowerCase()}">${f.val}</span>
+        <span class="ts-label">${f.label}</span>
+      </div>`).join('');
+    grid.innerHTML=batHtml+`<div class="ts-sep"></div>`+pitHtml;
+  } else {
+    [...batFields,...pitFields].forEach(f=>{
+      const el=document.getElementById(`tsv-${f.label.toLowerCase()}`);
+      if(el){ el.textContent=f.val; el.classList.toggle('nonzero',parseFloat(f.val)>0||f.val!=='.000'); }
+    });
+  }
+}
+
+function updateVolLabel(){
+  const pct=Math.round(volume*100);
+  document.getElementById('vol-label').textContent=volume===0?'🔇':`🔔 ${pct}%`;
+}
+
+function ensureAudio(){
+  if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+
+function playSound(name){
+  if(volume===0) return;
+  try{
+    ensureAudio();
+    const ctx=audioCtx, now=ctx.currentTime, v=volume;
+    const tone=(freq,startDelay,dur,vol=1)=>{
+      const osc=ctx.createOscillator(), g=ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type='sine'; osc.frequency.value=freq;
+      const t=now+startDelay;
+      g.gain.setValueAtTime(0,t);
+      g.gain.linearRampToValueAtTime(v*vol*0.22,t+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      osc.start(t); osc.stop(t+dur+0.01);
+    };
+    const noise=(startDelay,dur,vol=1)=>{
+      const buf=ctx.createBuffer(1,ctx.sampleRate*dur,ctx.sampleRate);
+      const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+      const src=ctx.createBufferSource(), g=ctx.createGain(), filt=ctx.createBiquadFilter();
+      src.buffer=buf; filt.type='bandpass'; filt.frequency.value=200; filt.Q.value=0.5;
+      src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+      const t=now+startDelay;
+      g.gain.setValueAtTime(v*vol*0.15,t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      src.start(t); src.stop(t+dur+0.01);
+    };
+    if(name==='atbat'){
+      // Sharp crack + rising fanfare — distinct from event sounds
+      noise(0,.04,.6);
+      tone(261.63,0.02,.12,.7);
+      tone(523.25,0.10,.18,1.0);
+      tone(659.25,0.22,.18,1.1);
+      tone(880.00,0.34,.30,1.2);
+    } else if(name==='hr'){
+      tone(523.25,0,.18); tone(659.25,.15,.18); tone(783.99,.30,.18); tone(1046.5,.45,.5);
+    } else if(name==='hit'){
+      tone(659.25,0,.22); tone(880,0.16,.35);
+    } else if(name==='sb'){
+      tone(587.33,0,.15); tone(783.99,.12,.28);
+    } else if(name==='k_good'){
+      tone(880,0,.15); tone(1108.7,.1,.3);
+    } else if(name==='k_bad'){
+      noise(0,.08,.8); tone(130.81,0,.35,.5);
+    } else if(name==='walk'){
+      tone(440,0,.2); tone(523.25,.18,.3);
+    } else if(name==='out'){
+      noise(0,.06,.5); tone(196,0,.25,.35);
+    } else {
+      tone(523.25,0,.22); tone(783.99,.15,.35);
+    }
+  }catch(_){}
+}
+
+function soundForEvent(type,role){
+  if(type==='HR') return 'hr';
+  if(['1B','2B','3B'].includes(type)) return 'hit';
+  if(type==='SB') return 'sb';
+  if(type==='K') return role==='pitcher'?'k_good':'k_bad';
+  if(type==='BB'||type==='HBP') return 'walk';
+  return 'out';
+}
+
+// ── SSE ──────────────────────────────────────────────────────────────────────
+const atBatSoundFired=new Set();
+const onDeckSoundFired=new Set();
+let sseReady=false; // suppress sounds on initial load
+
+function connectSSE(){
+  const es=new EventSource('/events');
+  es.addEventListener('state',e=>{
+    const newState=JSON.parse(e.data);
+    state=newState;
+    lastPoll=Date.now();
+    renderTodayStats();
+    for(const[name,info] of Object.entries(state.liveStatus??{})){
+      if(info.type==='batting'&&!atBatSoundFired.has(name)){
+        atBatSoundFired.add(name);
+        if(sseReady) playSound('atbat');
+      }
+      // on-deck: no sound (too frequent/noisy)
+    }
+    for(const name of [...atBatSoundFired]){
+      if(!state.liveStatus[name]||state.liveStatus[name].type!=='batting')
+        atBatSoundFired.delete(name);
+    }
+    for(const name of [...onDeckSoundFired]){
+      if(!state.liveStatus[name]||state.liveStatus[name].type!=='onDeck')
+        onDeckSoundFired.delete(name);
+    }
+    sseReady=true;
+    render();
+  });
+  es.addEventListener('toast',e=>{
+    const d=JSON.parse(e.data);
+    showToast(d);
+    if(sseReady) playSound(soundForEvent(d.type,d.role));
+  });
+  es.onopen=()=>setStatus('live','Live');
+  es.onerror=()=>{setStatus('error','Reconnecting…');es.close();setTimeout(connectSSE,3000);};
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render(){
+  renderLineup();
+  renderFeed();
+}
+
+let lpBuilt=false;
+let slotKeys={};
+let focusPlayer=null;
+
+function renderLineup(){
+  const lp=document.getElementById('lp');
+  const stats=state.stats??{};
+  const live=state.liveStatus??{};
+  const active=new Set(state.activeGamePlayers??[]);
+
+  if(!lpBuilt){
+    const slotHtml=d=>`<div class="slot-row" id="sr-${d.id}" data-slot="${d.id}"
+        ondragover="onDragOver(event,'${d.id}')" ondrop="onDrop(event,'${d.id}')"
+        ondragleave="onDragLeave(event,'${d.id}')" ondragend="onDragEnd()">
+        <div class="slot-label">${d.label}</div>
+        <div class="slot-body" id="sb-${d.id}"></div>
+        <div class="slot-actions" id="sa-${d.id}"></div>
+      </div>`;
+    const batHtml=SLOT_DEFS.filter(d=>d.group==='batter').map(slotHtml).join('');
+    const pitHtml=SLOT_DEFS.filter(d=>d.group==='pitcher').map(slotHtml).join('');
+    lp.innerHTML=
+      `<div class="lp-cols">`+
+        `<div class="lp-col" id="lp-batters">`+groupHdr('Batters')+batHtml+`</div>`+
+        `<div class="lp-col" id="lp-pitchers">`+groupHdr('Pitchers')+pitHtml+`</div>`+
+      `</div>`+
+      `<div class="group-hdr bench-hdr"><span class="gh-line"></span><span>Bench · not tracked</span><span class="gh-line"></span></div>`+
+      `<div class="bench-strip" id="bench-strip"></div>`;
+    lpBuilt=true;
+  }
+
+  for(const def of SLOT_DEFS.filter(d=>d.group!=='bench')){
+    const player=state.slots[def.id];
+    const norm=player?normalize(player.name):null;
+    const liveInfo=player?live[player.name]:null;
+    const inGame=norm?active.has(norm):false;
+    const s=player?stats[player.name]:null;
+    const isPit=def.group==='pitcher';
+
+    const key=JSON.stringify({player,liveInfo,inGame,s});
+    if(slotKeys[def.id]===key) continue;
+    slotKeys[def.id]=key;
+
+    const row=document.getElementById(`sr-${def.id}`);
+    if(!row) continue;
+
+    const isLive=liveInfo?.type==='batting'||liveInfo?.type==='pitching';
+    const isOnBase=liveInfo?.type==='onBase';
+    const gameStatus=player?(state.playerGameStates?.[player.name]??null):null;
+    const isFinal=gameStatus==='Final';
+    const isInactive=player&&!inGame&&!isFinal&&gameStatus!=='Live';
+    let rowCls='slot-row';
+    if(isLive)           rowCls+=' is-live';
+    else if(isOnBase)    rowCls+=' is-onbase';
+    else if(inGame)      rowCls+=' is-active-game';
+    else if(isFinal)     rowCls+=' is-final';
+    else if(isInactive)  rowCls+=' is-inactive';
+    row.className=rowCls;
+    row.draggable=!!player;
+    row.ondragstart=player?e=>onDragStart(e,def.id):null;
+
+    const body=document.getElementById(`sb-${def.id}`);
+    if(body) body.innerHTML=slotBody(player,liveInfo,s,isPit);
+
+    const acts=document.getElementById(`sa-${def.id}`);
+    if(acts){
+      const watchBtn=isLive?`<button class="btn-watch" onclick="openWatch(${liveInfo.gamePk})">📡 Watch</button>`:'';
+      const isActive=focusPlayer===player?.name;
+      const focusBtn=player?`<button class="btn-focus${isActive?' is-active':''}" onclick="toggleFocus('${player.name.replace(/'/g,"\\'")}')" title="Filter log to this player">ℹ</button>`:'';
+      acts.innerHTML=watchBtn+focusBtn+(player?`<button class="btn-clear" onclick="clearSlot('${def.id}')">✕</button>`:'');
+    }
+  }
+
+  // Bench
+  const bench=document.getElementById('bench-strip');
+  if(bench){
+    const benchKey=JSON.stringify(SLOT_DEFS.filter(d=>d.group==='bench').map(d=>state.slots[d.id]));
+    if(bench.dataset.key!==benchKey){
+      bench.dataset.key=benchKey;
+      bench.innerHTML=SLOT_DEFS.filter(d=>d.group==='bench').map(d=>{
+        const p=state.slots[d.id];
+        return `<div class="bench-slot" data-slot="${d.id}"
+          draggable="${!!p}"
+          ondragstart="${p?`onDragStart(event,'${d.id}')`:'undefined'}"
+          ondragover="onDragOver(event,'${d.id}')"
+          ondrop="onDrop(event,'${d.id}')"
+          ondragleave="onDragLeave(event,'${d.id}')"
+          ondragend="onDragEnd()">
+          <span class="bs-label">${d.label}</span>
+          ${p
+            ?`<span class="bs-name">${esc(p.name)}</span>
+              <button class="btn-clear bs-clear" onclick="clearSlot('${d.id}')">✕</button>`
+            :`<span class="bs-empty">empty</span>`
+          }
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+function toggleFocus(name){
+  focusPlayer = focusPlayer===name ? null : name;
+  // Re-stamp all action areas so active button updates
+  slotKeys={};
+  renderLineup();
+  renderFeed();
+}
+
+function groupHdr(label){
+  return `<div class="group-hdr"><span class="gh-line"></span><span>${label}</span><span class="gh-line"></span></div>`;
+}
+
+function slotBody(player, liveInfo, s, isPit){
+  if(!player) return `<div class="slot-empty"><div class="empty-plus">+</div>drop player here</div>`;
+
+  const teamBadge=player.teamAbbr?`<span class="team-badge">${esc(player.teamAbbr)}</span>`:'';
+  const photoUrl=playerHeadshot(player.mlbId);
+  const initial=lastName(player.name).charAt(0).toUpperCase();
+  const photoHtml=`<div class="slot-photo-wrap">
+    <span class="photo-initial">${initial}</span>
+    ${photoUrl?`<img src="${photoUrl}" alt="" loading="lazy" onerror="onHeadshotError(this,${player.mlbId??'null'})">`:``}
+  </div>`;
+
+  let statusLine='';
+  if(liveInfo){
+    const orderBadge=liveInfo.battingOrderPos?` <span class="order-badge">#${liveInfo.battingOrderPos}</span>`:'';
+    if(liveInfo.type==='batting')
+      statusLine=`<div class="slot-live-line"><span class="live-pip"></span>At Bat${orderBadge} · ${esc(liveInfo.inning)}${liveInfo.count?' · '+liveInfo.count:''}</div>`;
+    else if(liveInfo.type==='pitching')
+      statusLine=`<div class="slot-live-line"><span class="live-pip"></span>Pitching · ${esc(liveInfo.inning)}${liveInfo.count?' · '+liveInfo.count:''}</div>`;
+    else if(liveInfo.type==='onDeck')
+      statusLine=`<div class="slot-ondeck">⏭ On Deck${orderBadge}</div>`;
+    else if(liveInfo.type==='inHole')
+      statusLine=`<div class="slot-inhole">⏳ In the Hole${orderBadge}</div>`;
+  }
+
+  const statLine=buildStatLine(s,isPit);
+
+  return `${photoHtml}<div class="slot-info">
+    <div class="slot-name-row">
+      <span class="slot-name">${esc(player.name)}${teamBadge}</span>
+    </div>
+    ${statLine}
+    ${statusLine}
+  </div>`;
+}
+
+function buildStatLine(s, isPit){
+  if(isPit){
+    const ip  = `${Math.floor((s?.outs??0)/3)}.${(s?.outs??0)%3}`;
+    const ha  = s?.ha??0;
+    const k   = s?.k??0;
+    const bb  = s?.bb??0;
+    const w   = s?.w??0;
+    const sv  = s?.sv??0;
+    const er  = s?.er??0;
+    const era = (s?.era!=null&&s?.outs>0) ? s.era.toFixed(2) : '-.--';
+    const whip= (s?.whip!=null&&s?.outs>0) ? s.whip.toFixed(2) : '-.--';
+    const wCls  = w   ? 'sg-good' : '';
+    const kCls  = k   ? 'sg-good' : '';
+    const svCls = sv  ? 'sg-good' : '';
+    const bbCls = bb  ? 'sg-bad'  : '';
+    const erCls = er  ? 'sg-bad'  : '';
+    const eraCls= (s?.outs>0) ? (s.era<3?'sg-good':s.era>4.5?'sg-bad':'') : '';
+    return`<div class="stat-grid stat-grid-pit">
+      <span class="sg-c">${ip}<span class="sg-l">IP</span></span>
+      <span class="sg-c">${ha}<span class="sg-l">H</span></span>
+      <span class="sg-c ${kCls}">${k}<span class="sg-l">K</span></span>
+      <span class="sg-c ${bbCls}">${bb}<span class="sg-l">BB</span></span>
+      <span class="sg-c ${wCls}">${w}<span class="sg-l">W</span></span>
+      <span class="sg-c ${svCls}">${sv}<span class="sg-l">SV</span></span>
+      <span class="sg-c ${erCls}">${er}<span class="sg-l">ER</span></span>
+      <span class="sg-c ${eraCls}">${era}<span class="sg-l">ERA</span></span>
+      <span class="sg-c">${whip}<span class="sg-l">WHIP</span></span>
+    </div>`;
+  } else {
+    const h   = s?.h??0;
+    const ab  = s?.ab??0;
+    const r   = s?.r??0;
+    const hr  = s?.hr??0;
+    const rbi = s?.rbi??0;
+    const sb  = s?.sb??0;
+    const avg = (ab>0) ? (h/ab).toFixed(3).replace(/^0/,'') : '.000';
+    const avgCls = ab>0 ? (h/ab>=.300?'sg-good':h/ab<.200?'sg-bad':'') : '';
+    const hrCls  = hr  ? 'sg-hr' : '';
+    const hCls   = h   ? 'sg-good' : '';
+    return`<div class="stat-grid stat-grid-bat">
+      <span class="sg-c ${hCls}">${h}/${ab}<span class="sg-l">H/AB</span></span>
+      <span class="sg-c">${r}<span class="sg-l">R</span></span>
+      <span class="sg-c ${hrCls}">${hr}<span class="sg-l">HR</span></span>
+      <span class="sg-c">${rbi}<span class="sg-l">RBI</span></span>
+      <span class="sg-c">${sb}<span class="sg-l">SB</span></span>
+      <span class="sg-c ${avgCls}">${avg}<span class="sg-l">AVG</span></span>
+    </div>`;
+  }
+}
+
+// ── Snapshot stats (stats BEFORE each event, for accurate log display) ──────
+function computeSnapshots(events){
+  const sorted=[...events].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  const snapshots={}, running={};
+  for(const e of sorted){
+    const blank={role:e.role,h:0,ab:0,hr:0,r:0,rbi:0,sb:0,bf:0,outs:0,k:0,bb:0,ha:0,hra:0,er:0};
+    snapshots[e.id]=running[e.playerName]?{...running[e.playerName]}:{...blank};
+    const s=running[e.playerName]??(running[e.playerName]={...blank});
+    if(e.role==='hitter'){
+      if(e.type==='SB'){s.sb++;}
+      else{if(e.countsAsAb)s.ab++;if(e.isHit)s.h++;if(e.type==='HR')s.hr++;s.r+=e.runs??0;s.rbi+=e.rbi??0;}
+    } else {
+      s.bf++;s.outs+=e.outsRecorded??0;
+      if(e.type==='W'){s.w=(s.w??0)+1;continue;}
+      if(e.type==='SV'){s.sv=(s.sv??0)+1;continue;}
+      if(e.type==='K')s.k++;
+      if(e.type==='BB'||e.type==='HBP')s.bb++;
+      if(e.type==='HR')s.hra++;
+      if(e.isHit)s.ha++;
+      s.er+=e.runsAllowed??0;
+    }
+  }
+  return snapshots;
+}
+
+// ── Feed ─────────────────────────────────────────────────────────────────────
+const renderedEvIds=new Set();
+let feedBootstrapped=false;
+
+function renderFeed(){
+  const list=document.getElementById('feed-list');
+  const cnt=document.getElementById('event-count');
+  const rawEvents=state.events??[];
+  const events=[...rawEvents]
+    .filter(e=>!focusPlayer||e.playerName===focusPlayer)
+    .sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  const snapshots=computeSnapshots(rawEvents);
+
+  const baseLabel=events.length?`${events.length} play${events.length===1?'':'s'}`:'';
+  cnt.textContent=focusPlayer?`${baseLabel} · ${focusPlayer}`:baseLabel;
+
+  if(!events.length){
+    if(!feedBootstrapped||list.querySelector('.feed-empty')){
+      list.innerHTML=`<div class="feed-empty">
+        <div class="fe-icon">📡</div>
+        ${state.slots&&Object.values(state.slots).some(s=>s)
+          ?'Waiting for plays…'
+          :'Add players to start tracking.'}
+      </div>`;
+    }
+    feedBootstrapped=false;
+    renderedEvIds.clear();
+    return;
+  }
+
+  const empty=list.querySelector('.feed-empty');
+  if(empty) empty.remove();
+
+  // Full re-render when focus filter is active so the list reflects exactly
+  // the filtered set (including removing rows that shouldn't be shown)
+  if(focusPlayer){
+    list.innerHTML='';
+    renderedEvIds.clear();
+    const snap=computeSnapshots(rawEvents);
+    for(const e of [...events].reverse()){
+      const div=document.createElement('div');
+      div.innerHTML=buildEventRow(e,snap[e.id]);
+      list.appendChild(div.firstElementChild);
+      renderedEvIds.add(e.id);
+    }
+  } else {
+    for(const e of events){
+      if(renderedEvIds.has(e.id)) continue;
+      renderedEvIds.add(e.id);
+      const div=document.createElement('div');
+      div.innerHTML=buildEventRow(e,snapshots[e.id]);
+      const row=div.firstElementChild;
+      row.classList.add('ev-new');
+      setTimeout(()=>row.classList.remove('ev-new'),120000);
+      list.prepend(row);
+    }
+  }
+
+  feedBootstrapped=true;
+}
+
+function buildDiamond(first, second, third, outs){
+  const on='#e8c84a', off='rgba(255,255,255,0.08)', stroke='rgba(255,255,255,0.18)';
+  const outOn='#e03c3c', outOff='rgba(255,255,255,0.10)';
+  // Diamond occupies top 34px, out dots sit 6px below it
+  const W=36, dSz=34;
+  const cx=W/2, cy=dSz/2;
+  const b2x=cx,  b2y=3;
+  const b3x=3,   b3y=cy;
+  const b1x=W-3, b1y=cy;
+  const hx=cx,   hy=dSz-3;
+  const r=3.5;
+  // 2 out dots, centered under the diamond
+  const dotY=dSz+8;
+  const outsHtml=Array.from({length:2},(_,i)=>`<circle cx="${W/2-5+i*10}" cy="${dotY}" r="3" fill="${i<outs?outOn:outOff}"/>`).join('');
+  const totalH=dotY+4;
+  return `<svg class="diamond-svg" viewBox="0 0 ${W} ${totalH}" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="${b2x},${b2y} ${b1x},${b1y} ${hx},${hy} ${b3x},${b3y}" fill="none" stroke="${stroke}" stroke-width="1"/>
+    <circle cx="${b1x}" cy="${b1y}" r="${r}" fill="${first?on:off}"/>
+    <circle cx="${b2x}" cy="${b2y}" r="${r}" fill="${second?on:off}"/>
+    <circle cx="${b3x}" cy="${b3y}" r="${r}" fill="${third?on:off}"/>
+    <circle cx="${hx}"  cy="${hy}"  r="${r}" fill="${off}"/>
+    ${outsHtml}
+  </svg>`;
+}
+
+function buildEventRow(e, s){
+  const pit=e.role==='pitcher';
+  const display=e.type==='HBP'?'HBP':e.type;
+  const bClass=`ev-badge b-${e.type}${pit?' pit':''}`;
+
+  // Tags: RBI, R, Runs allowed
+  const tags=[];
+  if(!pit){
+    if(e.rbi>0)  tags.push(`<span class="tag tag-rbi">${e.rbi}RBI</span>`);
+    if(e.runs>0) tags.push(`<span class="tag tag-r">R</span>`);
+  } else {
+    if(e.runsAllowed>0) tags.push(`<span class="tag tag-ra">${e.runsAllowed}R</span>`);
+  }
+
+  // Snapshot statline
+  let sl='';
+  if(s){
+    if(!pit){
+      const avg=s.ab>0?(s.h/s.ab).toFixed(3).replace(/^0/,''):'.000';
+      sl=`<span class="${s.h>0?'s-hi':''}">${s.h}/${s.ab}</span>`
+        +(s.hr?` · <span class="s-hr">${s.hr}HR</span>`:'')
+        +(s.rbi?` · ${s.rbi}RBI`:'')+(s.r?` · ${s.r}R`:'')+` · <span class="avg">${avg}</span>`;
+    } else {
+      const ip=`${Math.floor(s.outs/3)}.${s.outs%3}`;
+      const era=s.outs>0?((s.er*9)/(s.outs/3)).toFixed(2):'0.00';
+      sl=`${ip}IP`+(s.w?` · <span class="s-hi">${s.w}W</span>`:'')
+        +(s.sv?` · <span class="s-hi">${s.sv}SV</span>`:'')
+        +(s.k?` · <span class="s-hi">${s.k}K</span>`:'')
+        +(s.bb?` · ${s.bb}BB`:'')+(s.ha?` · ${s.ha}H`:'')
+        +(s.hra?` · <span class="s-bad">${s.hra}HR</span>`:'')
+        +(s.er?` · <span class="s-bad">${s.er}ER</span>`:'')+` · ERA ${era}`;
+    }
+  }
+
+  // Score + context line
+  const gid=e.id.split(':')[0];
+  const gs=(state.gameScores??{})[gid];
+  const scoreStr=gs?`${esc(gs.awayAbbr)} ${gs.away}–${gs.home} ${esc(gs.homeAbbr)}`:'';
+  const sub=[e.inning, e.vs?`vs ${lastName(e.vs)}`:'' , scoreStr, e.gameLabel].filter(Boolean).join(' · ');
+
+  // Diamond — only show when we have situation data
+  const hasSit = e.preOuts!=null;
+  const diamond = hasSit ? buildDiamond(e.preFirst,e.preSecond,e.preThird,e.preOuts) : '';
+
+  // Hit quality chips
+  const chips=[];
+  if(e.finalCount)  chips.push(`<span class="ev-chip">${e.finalCount}</span>`);
+  if(e.exitVelo)    chips.push(`<span class="ev-chip ev-chip-velo">${Math.round(e.exitVelo)} mph</span>`);
+  if(e.launchAngle!=null) chips.push(`<span class="ev-chip">${Math.round(e.launchAngle)}°</span>`);
+  if(e.hitDistance) chips.push(`<span class="ev-chip">${Math.round(e.hitDistance)} ft</span>`);
+  if(e.trajectory)  chips.push(`<span class="ev-chip ev-chip-traj">${e.trajectory}</span>`);
+
+  return `<div class="ev-row" id="ev-${CSS.escape(e.id)}" data-player="${esc(e.playerName)}">
+    <div class="ev-left">
+      <div class="ev-time">${fmtTime(e.ts)}</div>
+      <div class="${bClass}">${esc(display)}</div>
+      ${diamond}
+    </div>
+    <div class="ev-body">
+      <div class="ev-top">
+        <span class="ev-player">${esc(e.playerName)}</span>
+        <div class="ev-tags">${tags.join('')}</div>
+      </div>
+      <div class="ev-desc">${esc(e.desc||e.label)}</div>
+      ${chips.length?`<div class="ev-chips">${chips.join('')}</div>`:''}
+      ${sl?`<div class="ev-statline">${sl}</div>`:''}
+      <div class="ev-sub">${esc(sub)}</div>
+    </div>
+  </div>`;
+}
+
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+function onDragStart(e,slotId){
+  dragFrom=slotId;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',slotId);
+  requestAnimationFrame(()=>document.querySelector(`[data-slot="${slotId}"]`)?.classList.add('is-dragging'));
+}
+function onDragOver(e,slotId){
+  if(!dragFrom||dragFrom===slotId) return;
+  e.preventDefault(); e.dataTransfer.dropEffect='move';
+  document.querySelector(`[data-slot="${slotId}"]`)?.classList.add('drag-over');
+}
+function onDragLeave(e,slotId){
+  document.querySelector(`[data-slot="${slotId}"]`)?.classList.remove('drag-over');
+}
+function onDrop(e,toSlotId){
+  e.preventDefault();
+  const from=e.dataTransfer.getData('text/plain')||dragFrom;
+  document.querySelector(`[data-slot="${toSlotId}"]`)?.classList.remove('drag-over');
+  if(!from||from===toSlotId) return;
+  swapSlots(from,toSlotId);
+}
+function onDragEnd(){
+  dragFrom=null;
+  document.querySelectorAll('.is-dragging').forEach(el=>el.classList.remove('is-dragging'));
+  document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
+}
+async function swapSlots(from,to){
+  await fetch('/api/roster/swap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from,to})});
+  setTimeout(()=>{
+    const el=document.querySelector(`[data-slot="${to}"]`);
+    if(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),650);}
+  },50);
+}
+async function clearSlot(slotId){
+  await fetch(`/api/roster/slot/${encodeURIComponent(slotId)}`,{
+    method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({player:null})
+  });
+}
+
+// ── Autocomplete ──────────────────────────────────────────────────────────────
+const searchInput=document.getElementById('search-input');
+const searchResults=document.getElementById('search-results');
+
+searchInput.addEventListener('input',()=>{
+  clearTimeout(acTimer);
+  const q=searchInput.value.trim();
+  if(q.length<2){searchResults.classList.remove('visible');acResults=[];acIdx=-1;return;}
+  acTimer=setTimeout(()=>fetchPlayers(q),180);
+});
+searchInput.addEventListener('keydown',e=>{
+  if(!searchResults.classList.contains('visible')) return;
+  if(e.key==='ArrowDown'){e.preventDefault();acIdx=Math.min(acIdx+1,acResults.length-1);highlightAC();}
+  else if(e.key==='ArrowUp'){e.preventDefault();acIdx=Math.max(acIdx-1,-1);highlightAC();}
+  else if(e.key==='Enter'&&acIdx>=0){e.preventDefault();selectPlayer(acResults[acIdx]);}
+  else if(e.key==='Escape'){searchResults.classList.remove('visible');acIdx=-1;}
+});
+document.addEventListener('click',e=>{
+  if(!searchInput.contains(e.target)&&!searchResults.contains(e.target)){
+    searchResults.classList.remove('visible');acIdx=-1;
+  }
+});
+
+async function fetchPlayers(q){
+  try{
+    const res=await fetch(`/api/players/search?q=${encodeURIComponent(q)}`);
+    acResults=await res.json(); acIdx=-1;
+    if(!acResults.length){searchResults.classList.remove('visible');return;}
+    searchResults.innerHTML=acResults.map((p,i)=>{
+      const photo=playerHeadshot(p.id);
+      return `<div class="sr-item" data-idx="${i}" onclick="selectPlayer(acResults[${i}])">
+        <img class="sr-photo" src="${photo||''}" alt="" loading="lazy" onerror="this.style.opacity='0'">
+        <div class="sr-details">
+          <span class="sr-name">${esc(p.name)}</span>
+          <span class="sr-pos">${esc(p.pos)}</span>
+          ${p.teamAbbr?`<span class="sr-team">${esc(p.teamAbbr)}</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+    searchResults.classList.add('visible');
+  }catch(_){}
+}
+function highlightAC(){
+  searchResults.querySelectorAll('.sr-item').forEach((el,i)=>el.classList.toggle('focused',i===acIdx));
+}
+
+async function selectPlayer(player){
+  searchResults.classList.remove('visible');
+  searchInput.value=''; acResults=[]; acIdx=-1;
+  const slot=findBestSlot(player.pos);
+  if(!slot){alert('Roster and bench are full!');return;}
+  await fetch(`/api/roster/slot/${encodeURIComponent(slot)}`,{
+    method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({player:{name:player.name,pos:player.pos,teamAbbr:player.teamAbbr??'',mlbId:player.id}})
+  });
+  setTimeout(()=>{
+    const el=document.querySelector(`[data-slot="${slot}"]`);
+    if(el){el.classList.add('flash');el.scrollIntoView({behavior:'smooth',block:'nearest'});setTimeout(()=>el.classList.remove('flash'),650);}
+  },80);
+}
+
+function findBestSlot(pos){
+  const slts=state.slots??{};
+  const IS_OF=['OF','LF','CF','RF'].includes(pos);
+  const IS_P=['SP','RP','P'].includes(pos);
+  const candidates=IS_P?SLOT_DEFS.filter(d=>d.group==='pitcher'):SLOT_DEFS.filter(d=>d.group==='batter');
+  for(const def of candidates){
+    if(def.id==='UTIL'||def.pos.includes('*')) continue;
+    const matches=IS_OF?def.pos.some(p=>['OF','LF','CF','RF'].includes(p)):def.pos.includes(pos);
+    if(matches&&!slts[def.id]) return def.id;
+  }
+  if(!IS_P&&!slts['UTIL']) return 'UTIL';
+  for(const def of SLOT_DEFS.filter(d=>d.group==='bench')) if(!slts[def.id]) return def.id;
+  return null;
+}
+
+// ── Status + poll countdown ───────────────────────────────────────────────────
+function setStatus(type,text){
+  document.getElementById('status-dot').className=type;
+  document.getElementById('status-txt').textContent=text;
+}
+setInterval(()=>{
+  if(!lastPoll) return;
+  const next=Math.max(0,10-Math.round((Date.now()-lastPoll)/1000));
+  document.getElementById('poll-eta').textContent=`next ${next}s`;
+},1000);
+
+// ── Toasts ────────────────────────────────────────────────────────────────────
+function showToast(data){
+  const root=document.getElementById('toast-root');
+  let cls='toast';
+  if(data.type==='HR') cls+=' t-hr';
+  else if(['1B','2B','3B'].includes(data.type)) cls+=' t-hit';
+  else if(data.type==='K'&&data.role==='pitcher') cls+=' t-k';
+  else if(data.type==='SB') cls+=' t-sb';
+  else cls+=' t-out';
+  const el=document.createElement('div');
+  el.className=cls;
+  el.innerHTML=`<div class="toast-title">${esc(data.playerName)}: ${esc(data.label)}</div>
+    <div class="toast-sub">${esc([data.inning,data.gameLabel].filter(Boolean).join(' · '))}</div>
+    ${data.desc?`<div class="toast-desc">${esc((data.desc||'').slice(0,110))}</div>`:''}`;
+  root.appendChild(el);
+  while(root.children.length>5) root.firstChild.remove();
+  setTimeout(()=>{
+    el.style.cssText='opacity:0;transform:translateX(18px);transition:opacity .35s,transform .35s';
+    setTimeout(()=>el.remove(),350);
+  },7000);
+}
+
+// ── Watch modal ───────────────────────────────────────────────────────────────
+function openWatch(gamePk){
+  watchGPK=gamePk;
+  document.getElementById('watch-overlay').classList.add('open');
+  document.getElementById('wm-result').style.display='none';
+  fetchAtBat();
+  watchTimer=setInterval(fetchAtBat,8000);
+}
+function closeWatch(){
+  document.getElementById('watch-overlay').classList.remove('open');
+  clearInterval(watchTimer);watchTimer=null;watchGPK=null;
+}
+document.getElementById('watch-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeWatch();});
+
+async function fetchAtBat(){
+  if(!watchGPK) return;
+  try{
+    const res=await fetch(`/api/live-atbat/${watchGPK}`);
+    const data=await res.json();
+    if(data.error) return;
+    renderAtBat(data);
+    if(data.isComplete){
+      const r=document.getElementById('wm-result');
+      r.style.display='block'; r.textContent=data.result||'At bat complete.';
+      setTimeout(closeWatch,4000);
+    }
+  }catch(_){}
+}
+
+function renderAtBat(data){
+  // Game context header
+  const away=document.getElementById('wm-game-away');
+  const home=document.getElementById('wm-game-home');
+  const inn =document.getElementById('wm-inning-badge');
+  if(away) away.textContent='—';
+  if(home) home.textContent='—';
+  if(inn)  inn.textContent=`${data.inning} · ${data.outs} Out${data.outs!==1?'s':''}`;
+
+  // Matchup
+  document.getElementById('wm-batter-name').textContent=data.batter;
+  document.getElementById('wm-bat-hand').textContent=data.batSide==='L'?'Left Handed':data.batSide==='S'?'Switch Hitter':'Right Handed';
+  document.getElementById('wm-pitcher-name').textContent=data.pitcher;
+  document.getElementById('wm-pit-hand').textContent=data.pitSide==='L'?'Left Handed':'Right Handed';
+
+  // Count dots
+  const{balls,strikes}=data.count;
+  document.getElementById('wm-ball-dots').innerHTML=[0,1,2].map(i=>`<div class="wm-dot${i<balls?' wm-ball':''}"></div>`).join('');
+  document.getElementById('wm-strike-dots').innerHTML=[0,1].map(i=>`<div class="wm-dot${i<strikes?' wm-strike':''}"></div>`).join('');
+  document.getElementById('wm-out-dots').innerHTML=[0,1].map(i=>`<div class="wm-dot${i<data.outs?' wm-out':''}"></div>`).join('');
+
+  // Bases
+  const{first,second,third}=data.runners;
+  document.getElementById('wm-bases-wrap').innerHTML=renderBasesSVG(first,second,third);
+
+  renderZoneSVG(data.pitches);
+  renderPitchLog(data.pitches);
+}
+
+function renderBasesSVG(first,second,third){
+  const sq=18,gap=24,cx=54,cy=54;
+  const pos={second:[cx,cy-gap],third:[cx-gap,cy],first:[cx+gap,cy],home:[cx,cy+gap]};
+  const toSVG=([x,y])=>[[-sq/2,0],[0,-sq/2],[sq/2,0],[0,sq/2]].map(([dx,dy])=>`${x+dx},${y+dy}`).join(' ');
+  const base=(k,on)=>{const[x,y]=pos[k];return`<polygon points="${toSVG([x,y])}" fill="${on?'#f59e0b':'#0d1828'}" stroke="${on?'#f59e0b':'#1e3454'}" stroke-width="1.5"/>`;};
+  return`<svg width="108" height="108" viewBox="0 0 108 108" class="wm-bases-svg">${base('second',second)}${base('third',third)}${base('first',first)}${base('home',false)}</svg>`;
+}
+
+function renderZoneSVG(pitches){
+  const svg=document.getElementById('zone-svg');
+  const W=200,H=240;
+  const toX=pX=>(pX+2.5)/5*W, toY=pZ=>(1-pZ/5)*H;
+  const last=pitches[pitches.length-1];
+  const szTop=last?.szTop??3.5,szBot=last?.szBot??1.5;
+  const zL=toX(-0.708),zR=toX(0.708),zT=toY(szTop),zB=toY(szBot);
+  const pW=55,pH=12,px=W/2-pW/2,py=H-20;
+  const platePts=`${px},${py+pH} ${px},${py} ${px+pW/2-7},${py-7} ${px+pW/2+7},${py-7} ${px+pW},${py} ${px+pW},${py+pH}`;
+  let inner=`
+    <rect x="${zL-20}" y="${zT-16}" width="${zR-zL+40}" height="${zB-zT+32}" fill="none" stroke="#162336" stroke-width="1" stroke-dasharray="3 3" rx="2"/>
+    <rect x="${zL}" y="${zT}" width="${zR-zL}" height="${zB-zT}" fill="rgba(56,189,248,0.04)" stroke="#38bdf8" stroke-width="1.5" rx="1"/>
+    ${[1/3,2/3].map(f=>`<line x1="${zL+f*(zR-zL)}" y1="${zT}" x2="${zL+f*(zR-zL)}" y2="${zB}" stroke="#162336" stroke-width="1"/>`).join('')}
+    ${[1/3,2/3].map(f=>`<line x1="${zL}" y1="${zT+f*(zB-zT)}" x2="${zR}" y2="${zT+f*(zB-zT)}" stroke="#162336" stroke-width="1"/>`).join('')}
+    <polygon points="${platePts}" fill="#0a1220" stroke="#1e3454" stroke-width="1.5"/>
+    <text x="${W/2}" y="${H-3}" text-anchor="middle" fill="#162336" font-size="7" font-family="monospace">CATCHER'S VIEW</text>`;
+  pitches.forEach(p=>{
+    if(p.pX===null||p.pZ===null) return;
+    const x=toX(p.pX),y=toY(p.pZ),col=pitchColor(p.type);
+    inner+=`<circle cx="${x}" cy="${y}" r="10" fill="${col}" fill-opacity=".85" stroke="rgba(0,0,0,.4)" stroke-width="1"/>
+      <text x="${x}" y="${y+3.5}" text-anchor="middle" fill="white" font-size="8" font-weight="700" font-family="monospace">${p.num}</text>`;
+  });
+  svg.innerHTML=`<rect width="${W}" height="${H}" fill="#050810"/>`+inner;
+}
+
+function renderPitchLog(pitches){
+  const el=document.getElementById('pitch-log');
+  if(!pitches.length){el.innerHTML='<div class="pl-waiting">⏳ Waiting for pitches…</div>';return;}
+  const last=pitches[pitches.length-1];
+  const countStr=last?`${last.count?.balls??0}-${last.count?.strikes??0}`:'';
+  el.innerHTML=`
+    <div class="pl-header">
+      <span class="pl-title">PITCH SEQUENCE</span>
+      <span class="pl-count-badge">Count: ${esc(countStr)}</span>
+    </div>
+    <div class="pl-table-wrap">
+    <table class="pl-table">
+      <thead><tr><th>#</th><th>TYPE</th><th>VELO</th><th>RESULT</th></tr></thead>
+      <tbody>
+      ${pitches.map(p=>{
+        const col=pitchColor(p.type);
+        const resultCls=p.inPlay?'pl-in-play':p.isStrike?'pl-strike':p.isBall?'pl-ball':'';
+        return`<tr class="${pitches[pitches.length-1]===p?'pl-last':''}">
+          <td class="pl-num">${p.num}</td>
+          <td><span class="pl-type-badge" style="background:${col}22;color:${col};border-color:${col}55">${esc(p.type)}</span></td>
+          <td class="pl-velo">${p.speed!=null?p.speed.toFixed(1)+'<span class="pl-unit">mph</span>':'—'}</td>
+          <td class="pl-result ${resultCls}">${esc((p.desc||'').slice(0,28))}</td></tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+    </div>`;
+}
+
+// ── MLB Scoreboard ─────────────────────────────────────────────────────────────
+let scoreboardTimer=null;
+
+function buildScoreDiamond(first,second,third){
+  const on='#f59e0b',off='rgba(255,255,255,0.07)',stroke='rgba(255,255,255,0.13)';
+  const W=30,dSz=28,cx=W/2,cy=dSz/2;
+  const b2x=cx,b2y=3,b3x=3,b3y=cy,b1x=W-3,b1y=cy,hx=cx,hy=dSz-3;
+  const r=3;
+  const toSVG=([x,y])=>[[-r,0],[0,-r],[r,0],[0,r]].map(([dx,dy])=>`${x+dx},${y+dy}`).join(' ');
+  return`<svg class="sg-diamond" width="${W}" height="${dSz}" viewBox="0 0 ${W} ${dSz}">
+    <polygon points="${b2x},${b2y} ${b1x},${b1y} ${hx},${hy} ${b3x},${b3y}" fill="none" stroke="${stroke}" stroke-width="1"/>
+    <polygon points="${toSVG([b1x,b1y])}" fill="${first?on:off}"/>
+    <polygon points="${toSVG([b2x,b2y])}" fill="${second?on:off}"/>
+    <polygon points="${toSVG([b3x,b3y])}" fill="${third?on:off}"/>
+  </svg>`;
+}
+
+function formatGameTime(iso){
+  try{
+    return new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'America/New_York'}).replace(':00','').toLowerCase();
+  }catch(_){return'—';}
+}
+
+function teamLogoUrl(teamId){
+  if(!teamId) return null;
+  return `https://www.mlbstatic.com/team-logos/${teamId}.svg`;
+}
+
+async function fetchScoreboard(){
+  try{
+    const res=await fetch('/api/scoreboard');
+    const games=await res.json();
+    if(Array.isArray(games)) renderScoreboard(games);
+  }catch(_){}
+}
+
+function renderScoreboard(games){
+  const bar=document.getElementById('mlb-scores-inner');
+  if(!bar) return;
+  if(!games.length){bar.innerHTML='<div class="sg-loading">No games today</div>';return;}
+
+  // Non-final sorted by start time, then finals sorted by start time
+  const nonFinal=games.filter(g=>g.status!=='Final').sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
+  const finals  =games.filter(g=>g.status==='Final').sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
+  const sorted=[...nonFinal,...finals];
+
+  bar.innerHTML=sorted.map(g=>{
+    const isLive=g.status==='Live';
+    const isFinal=g.status==='Final';
+    const isPreview=g.status==='Preview'||(!isLive&&!isFinal);
+    const url=`https://www.mlb.com/gameday/${g.gamePk}`;
+
+    let statusHtml='';
+    if(isLive&&g.inning){
+      const half=g.inningHalf&&g.inningHalf.toLowerCase().startsWith('top')?'▲':'▼';
+      const diamond=buildScoreDiamond(g.runners?.first,g.runners?.second,g.runners?.third);
+      const outsStr=`${g.outs} <span class="sg-outs-label">out${g.outs!==1?'s':''}</span>`;
+      statusHtml=`
+        <div class="sg-status-live">
+          <div class="sg-live-inning"><span class="sg-live-pip"></span>${half}${g.inning}</div>
+          <div class="sg-live-row2">
+            ${diamond}
+            <div class="sg-live-details">
+              <span class="sg-count-display">${g.balls}-${g.strikes}</span>
+              <span class="sg-outs-display">${outsStr}</span>
+            </div>
+          </div>
+        </div>`;
+    } else if(isFinal){
+      statusHtml=`<div class="sg-status-final">FINAL</div>`;
+    } else {
+      statusHtml=`<div class="sg-status-time">${esc(formatGameTime(g.startTime))}</div>`;
+    }
+
+    // Highlight winning team in final
+    const awayWin=isFinal&&g.awayScore>g.homeScore;
+    const homeWin=isFinal&&g.homeScore>g.awayScore;
+
+    const awayLogo=teamLogoUrl(g.awayId);
+    const homeLogo=teamLogoUrl(g.homeId);
+
+    return`<a class="sg-card${isLive?' sg-live':''}${isFinal?' sg-final':''}${isPreview?' sg-preview':''}" href="${url}" target="_blank" rel="noopener">
+      <div class="sg-teams">
+        <div class="sg-team-row${awayWin?' sg-winner':''}">
+          <div class="sg-logo-wrap">
+            ${awayLogo?`<img class="sg-team-logo" src="${awayLogo}" alt="${esc(g.awayAbbr)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="sg-abbr-fb" style="display:none">${esc(g.awayAbbr)}</span>`
+                      :`<span class="sg-abbr-fb">${esc(g.awayAbbr)}</span>`}
+          </div>
+          <span class="sg-score">${isPreview?'':g.awayScore}</span>
+        </div>
+        <div class="sg-team-row${homeWin?' sg-winner':''}">
+          <div class="sg-logo-wrap">
+            ${homeLogo?`<img class="sg-team-logo" src="${homeLogo}" alt="${esc(g.homeAbbr)}" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="sg-abbr-fb" style="display:none">${esc(g.homeAbbr)}</span>`
+                      :`<span class="sg-abbr-fb">${esc(g.homeAbbr)}</span>`}
+          </div>
+          <span class="sg-score">${isPreview?'':g.homeScore}</span>
+        </div>
+      </div>
+      ${statusHtml}
+    </a>`;
+  }).join('');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function normalize(s){
+  return String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z\s]/gi,' ').toLowerCase()
+    .replace(/\b(jr|sr|ii|iii|iv)\b/g,'').replace(/\s+/g,' ').trim();
+}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function lastName(s){const p=String(s).split(' ').filter(Boolean);return p[p.length-1]??s;}
+function fmtTime(ts){
+  try{return new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}).replace(' ','').toLowerCase();}
+  catch(_){return'—';}
+}
+
+
+// ── Draggable divider ────────────────────────────────────────────────────────
+(()=>{
+  const app=document.getElementById('app');
+  const dv=document.getElementById('divider');
+  if(!dv) return;
+  let dragging=false, startX=0, startW=0;
+
+  // Restore saved position
+  const savedW=localStorage.getItem('mlb_divider_w');
+  if(savedW) app.style.setProperty('--lp-w', savedW+'px');
+
+  dv.addEventListener('mousedown',e=>{
+    dragging=true;
+    startX=e.clientX;
+    startW=document.getElementById('lp').getBoundingClientRect().width;
+    dv.classList.add('dragging');
+    document.body.style.cursor='col-resize';
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging) return;
+    const appW=app.getBoundingClientRect().width;
+    const newW=Math.max(320,Math.min(appW-320,startW+(e.clientX-startX)));
+    app.style.setProperty('--lp-w',newW+'px');
+  });
+  document.addEventListener('mouseup',()=>{
+    if(!dragging) return;
+    dragging=false;
+    dv.classList.remove('dragging');
+    document.body.style.cursor='';
+    document.body.style.userSelect='';
+    // Persist position
+    const curW=document.getElementById('lp').getBoundingClientRect().width;
+    localStorage.setItem('mlb_divider_w', Math.round(curW));
+  });
+})();
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+initVolumeUI();
+renderTodayStats();
+fetchScoreboard();
+scoreboardTimer=setInterval(fetchScoreboard,15_000);
+connectSSE();
+</script>
+</body>
+</html>
