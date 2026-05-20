@@ -211,6 +211,9 @@ function loadSlots() {
             SLOT_DEFS.forEach(d => {
               if (raw[t][d.id] !== undefined) slots[t][d.id] = raw[t][d.id];
             });
+            if (raw[t].teamName) {
+              slots[t].teamName = raw[t].teamName;
+            }
           }
         }
       }
@@ -273,6 +276,14 @@ function innStr(play) {
   return `${play?.about?.halfInning==='top'?'Top':'Bot'} ${play?.about?.inning??''}`.trim();
 }
 
+function parseIPToOuts(ipStr) {
+  if (!ipStr) return 0;
+  const parts = String(ipStr).split('.');
+  const innings = parseInt(parts[0] || '0', 10);
+  const fraction = parseInt(parts[1] || '0', 10);
+  return innings * 3 + fraction;
+}
+
 // ─── Tracker ───────────────────────────────────────────────────────────────────
 class Tracker {
   constructor() {
@@ -282,6 +293,7 @@ class Tracker {
     this.finalGames         = new Set();
     this.finalDecisionGames = new Set();   // games whose boxscore decisions we've fetched
     this.playerCheckedGames = new Map();
+    this.pitcherBoxStats    = new Map();   // official live pitching stats to override play events
     this.events             = [];  // kept sorted newest-first by ts
     this.seenIds            = new Set();
     this.liveStatus         = {};
@@ -299,7 +311,7 @@ class Tracker {
     this.playerGameMap.clear(); this.gameRosters.clear();
     this.playerPlayIdx.clear(); this.finalGames.clear();
     this.finalDecisionGames.clear();
-    this.playerCheckedGames.clear(); this.events=[];
+    this.playerCheckedGames.clear(); this.pitcherBoxStats.clear(); this.events=[];
     this.seenIds=new Set(); this.liveStatus={}; this.gameScores={};
     this.activeGamePlayers.clear();
     console.log('[Tracker] New day:',today);
@@ -343,6 +355,43 @@ class Tracker {
         s.er+=e.runsAllowed??0;
       }
     }
+
+    // Add any pitchers that have boxscore stats but no events yet
+    for (const norm of this.pitcherBoxStats.keys()) {
+      let playerName = null;
+      for (const t of [1, 2, 3, 4, 5]) {
+        const match = Object.values(slots[t] || {}).find(p => p && normalize(p.name) === norm);
+        if (match) {
+          playerName = match.name;
+          break;
+        }
+      }
+      if (playerName && !stats[playerName]) {
+        stats[playerName] = {
+          role: 'pitcher', h:0,ab:0,hr:0,r:0,rbi:0,sb:0,
+          bf:0,outs:0,k:0,bb:0,ha:0,hra:0,er:0,
+        };
+      }
+    }
+
+    // Override pitcher stats with official live boxscore stats
+    for (const [name, s] of Object.entries(stats)) {
+      if (s.role === 'pitcher') {
+        const norm = normalize(name);
+        const boxStat = this.pitcherBoxStats.get(norm);
+        if (boxStat) {
+          s.er = boxStat.er;
+          s.outs = boxStat.outs;
+          s.k = boxStat.k;
+          s.bb = boxStat.bb;
+          s.ha = boxStat.ha;
+          s.hra = boxStat.hra;
+          s.w = boxStat.w;
+          s.sv = boxStat.sv;
+        }
+      }
+    }
+
     for (const s of Object.values(stats)) {
       if (s.role==='pitcher') {
         const ip=s.outs/3;
@@ -508,48 +557,64 @@ class Tracker {
         const cur=pbp?.currentPlay;
         if (cur&&!cur.about?.isComplete) this._updateLive(cur,gp,label,gameId);
 
-        // ── Fetch boxscore once per Final game to get W/SV decisions ──────────
-        if (isFinal && !this.finalDecisionGames.has(gameId)) {
-          try {
-            const box=await mlbFetch(`/api/v1/game/${gameId}/boxscore`);
-            const allPlayers={
-              ...box?.teams?.away?.players??{},
-              ...box?.teams?.home?.players??{},
-            };
-            for (const player of gp) {
-              if (!player.isPitcher) continue;
-              const map=this.playerGameMap.get(player.norm);
-              if (!map) continue;
-              const key=`ID${map.apiId}`;
+        // ── Fetch boxscore for all games (Live and Final) to get official stats ──────────
+        try {
+          const box=await mlbFetch(`/api/v1/game/${gameId}/boxscore`);
+          const allPlayers={
+            ...box?.teams?.away?.players??{},
+            ...box?.teams?.home?.players??{},
+          };
+          for (const player of gp) {
+            const map=this.playerGameMap.get(player.norm);
+            if (!map) continue;
+            const key=`ID${map.apiId}`;
+            
+            if (player.isPitcher) {
               const ps=allPlayers[key]?.stats?.pitching;
-              if (!ps) continue;
-              const ts=new Date().toISOString();
-              if (ps.wins>0) {
-                const evId=`${gameId}:W:${map.apiId}`;
-                this._addEvent({
-                  id:evId,ts,playerName:player.name,role:'pitcher',
-                  type:'W',label:'Win',desc:`${player.name} earns the Win.`,
-                  inning:'Final',gameLabel:label,vs:'',
-                  isHit:false,countsAsAb:false,rbi:0,runs:0,
-                  outsRecorded:0,runsAllowed:0,
+              if (ps) {
+                this.pitcherBoxStats.set(player.norm, {
+                  er: ps.earnedRuns??0,
+                  outs: parseIPToOuts(ps.inningsPitched),
+                  k: ps.strikeOuts??0,
+                  bb: ps.baseOnBalls??0,
+                  ha: ps.hits??0,
+                  hra: ps.homeRuns??0,
+                  w: ps.wins??0,
+                  sv: ps.saves??0,
                 });
-              }
-              if (ps.saves>0) {
-                const evId=`${gameId}:SV:${map.apiId}`;
-                this._addEvent({
-                  id:evId,ts,playerName:player.name,role:'pitcher',
-                  type:'SV',label:'Save',desc:`${player.name} records the Save.`,
-                  inning:'Final',gameLabel:label,vs:'',
-                  isHit:false,countsAsAb:false,rbi:0,runs:0,
-                  outsRecorded:0,runsAllowed:0,
-                });
+                
+                // Add final Win/Save events if not yet recorded
+                if (isFinal && !this.finalDecisionGames.has(gameId)) {
+                  const ts=new Date().toISOString();
+                  if (ps.wins>0) {
+                    const evId=`${gameId}:W:${map.apiId}`;
+                    this._addEvent({
+                      id:evId,ts,playerName:player.name,role:'pitcher',
+                      type:'W',label:'Win',desc:`${player.name} earns the Win.`,
+                      inning:'Final',gameLabel:label,vs:'',
+                      isHit:false,countsAsAb:false,rbi:0,runs:0,
+                      outsRecorded:0,runsAllowed:0,
+                    });
+                  }
+                  if (ps.saves>0) {
+                    const evId=`${gameId}:SV:${map.apiId}`;
+                    this._addEvent({
+                      id:evId,ts,playerName:player.name,role:'pitcher',
+                      type:'SV',label:'Save',desc:`${player.name} records the Save.`,
+                      inning:'Final',gameLabel:label,vs:'',
+                      isHit:false,countsAsAb:false,rbi:0,runs:0,
+                      outsRecorded:0,runsAllowed:0,
+                    });
+                  }
+                }
               }
             }
-            this.finalDecisionGames.add(gameId);
-            console.log(`[Decisions] Fetched boxscore for game ${gameId}`);
-          } catch(e) {
-            console.warn(`[Decisions] Boxscore fetch failed for ${gameId}:`,e.message);
           }
+          if (isFinal) {
+            this.finalDecisionGames.add(gameId);
+          }
+        } catch(e) {
+          console.warn(`[Boxscore] Fetch/process failed for game ${gameId}:`, e.message);
         }
 
         // Linescore for onDeck/inHole + batting order
@@ -848,6 +913,13 @@ function buildState(teamId = 1){
     error: tracker.lastError,
     ts: Date.now(),
     teamId,
+    teamNames: {
+      "1": slots["1"]?.teamName || "Team 1",
+      "2": slots["2"]?.teamName || "Team 2",
+      "3": slots["3"]?.teamName || "Team 3",
+      "4": slots["4"]?.teamName || "Team 4",
+      "5": slots["5"]?.teamName || "Team 5"
+    }
   };
 }
 
@@ -889,6 +961,19 @@ app.post('/api/roster/swap',(req,res)=>{
   if(!SLOT_MAP[from]||!SLOT_MAP[to]) return res.status(400).json({error:'Invalid slots'});
   [slots[teamId][from],slots[teamId][to]]=[slots[teamId][to],slots[teamId][from]];
   saveSlots();broadcast('state',null);res.json({ok:true});
+});
+
+app.post('/api/team/rename',(req,res)=>{
+  const teamId = Number(req.query.team || 1);
+  const name = String(req.body?.name || '').trim();
+  if (name.length > 25) return res.status(400).json({ error: 'Name too long (max 25 characters)' });
+  
+  if (!slots[teamId]) slots[teamId] = {};
+  slots[teamId].teamName = name || `Team ${teamId}`;
+  
+  saveSlots();
+  broadcast('state',null);
+  res.json({ok:true});
 });
 
 app.get('/api/state',(req,res)=>{

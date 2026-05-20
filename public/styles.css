@@ -300,6 +300,31 @@ body {
   border-color: var(--gold);
   box-shadow: 0 0 0 2px var(--gold-dim);
 }
+#btn-rename-team {
+  background: transparent;
+  border: none;
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 10px;
+  margin-left: 6px;
+  padding: 4px;
+  border-radius: var(--r);
+  transition: background-color .15s, transform .15s, color .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+}
+#btn-rename-team:hover {
+  background-color: var(--surf2);
+  color: var(--bright);
+  transform: scale(1.1);
+}
+#btn-rename-team:active {
+  transform: scale(0.9);
+}
 
 /* Today Stats — inline in header */
 #today-stats-inline {
@@ -581,6 +606,14 @@ body {
   transition: background .2s;
 }
 
+/* ── pitcher slot — base tint (layered under live/active states via cascade order) ── */
+.slot-row.is-pitcher {
+  background: linear-gradient(90deg, rgba(244,63,94,.055) 0%, var(--surf) 80%);
+  border-color: rgba(244, 63, 94, 0.2);
+}
+.slot-row.is-pitcher::before { background: rgba(244, 63, 94, 0.4); }
+.slot-row.is-pitcher .slot-label { color: rgba(244, 63, 94, 0.6); }
+
 /* ── not playing / no game scheduled ── */
 .slot-row.is-inactive {
   border-color: var(--border);
@@ -782,7 +815,21 @@ body {
   flex-shrink: 0;
 }
 .stat-grid-bat {
-  grid-template-columns: 48px 22px 26px 28px 22px 40px;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: nowrap;
+}
+.stat-grid-bat .sg-c {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 14px;
+}
+.stat-grid-bat .sg-l {
+  font-size: 14px;
+  margin-top: 0;
 }
 .stat-grid-pit {
   grid-template-columns: 28px 20px 22px 22px 20px 20px 22px 36px 36px;
@@ -985,6 +1032,12 @@ body {
   transition: background .1s;
 }
 .ev-row:hover { background: var(--surf); }
+
+/* Pitcher log rows — subtle red tint */
+.ev-row.ev-pitcher {
+  background: rgba(244, 63, 94, 0.045);
+}
+.ev-row.ev-pitcher:hover { background: rgba(244, 63, 94, 0.08); }
 .ev-row.ev-new { animation: ev-slide-in .35s ease; }
 @keyframes ev-slide-in {
   from { opacity: 0; transform: translateX(-10px); }
