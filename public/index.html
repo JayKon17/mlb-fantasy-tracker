@@ -27,6 +27,20 @@
                value="0.6" oninput="setVolume(this.value)">
       </div>
 
+      <div id="team-select-wrap">
+        <select id="team-select" onchange="changeTeam(this.value)">
+          <option value="1">Team 1</option>
+          <option value="2">Team 2</option>
+          <option value="3">Team 3</option>
+          <option value="4">Team 4</option>
+          <option value="5">Team 5</option>
+        </select>
+      </div>
+
+      <div id="today-stats-inline">
+        <div class="ts-grid" id="ts-grid-inner"></div>
+      </div>
+
       <div id="status-wrap">
         <div id="status-dot"></div>
         <span id="status-txt">Connecting…</span>
@@ -36,10 +50,6 @@
 
     <div id="mlb-scores">
       <div id="mlb-scores-inner"><div class="sg-loading">Loading scores…</div></div>
-    </div>
-
-    <div id="today-stats">
-      <div class="ts-grid" id="ts-grid-inner"></div>
     </div>
   </header>
 
@@ -158,6 +168,7 @@ const PITCH_COLORS={
 function pitchColor(t){return PITCH_COLORS[t]||'#64748b'}
 
 // ── State ────────────────────────────────────────────────────────────────────
+let currentTeamId=parseInt(localStorage.getItem('mlb_team_id')||'1');
 let state={slots:{},events:[],stats:{},liveStatus:{},activeGamePlayers:[],playerGameStates:{}};
 let lastPoll=null;
 let dragFrom=null;
@@ -165,20 +176,23 @@ let watchGPK=null,watchTimer=null;
 let acIdx=-1,acResults=[],acTimer=null;
 
 // ── Player headshot ──────────────────────────────────────────────────────────
+const HEADSHOT_ROUTES = [
+  id => `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${id}/headshot/67/current`,
+  id => `https://content.mlb.com/images/headshots/67/${id}@2x.jpg`,
+  id => `https://securea.mlb.com/mlb/images/players/head_shot/${id}.jpg`,
+];
 function playerHeadshot(mlbId){
   if(!mlbId) return null;
-  // Format 67 (standard facing-forward headshot) has better player coverage than silo
-  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${mlbId}/headshot/67/current`;
+  return HEADSHOT_ROUTES[0](mlbId);
 }
-function playerHeadshotFallback(mlbId){
-  if(!mlbId) return null;
-  // Secondary fallback: content.mlb.com direct path
-  return `https://content.mlb.com/images/headshots/67/${mlbId}@2x.jpg`;
-}
-function onHeadshotError(img, mlbId){
-  const fb = playerHeadshotFallback(mlbId);
-  if(fb && img.src !== fb){ img.src = fb; }
-  else { img.remove(); }
+function onHeadshotError(img, mlbId, routeIdx=0){
+  const nextIdx = routeIdx + 1;
+  if(nextIdx < HEADSHOT_ROUTES.length){
+    img.onerror = () => onHeadshotError(img, mlbId, nextIdx);
+    img.src = HEADSHOT_ROUTES[nextIdx](mlbId);
+  } else {
+    img.remove();
+  }
 }
 
 // ── Audio ────────────────────────────────────────────────────────────────────
@@ -297,14 +311,27 @@ function playSound(name){
       src.start(t); src.stop(t+dur+0.01);
     };
     if(name==='atbat'){
-      // Sharp crack + rising fanfare — distinct from event sounds
-      noise(0,.04,.6);
-      tone(261.63,0.02,.12,.7);
-      tone(523.25,0.10,.18,1.0);
-      tone(659.25,0.22,.18,1.1);
-      tone(880.00,0.34,.30,1.2);
+      // Very subtle chime — player stepped to the plate
+      tone(523.25,0,.08,.4);
+      tone(659.25,.07,.12,.35);
     } else if(name==='hr'){
-      tone(523.25,0,.18); tone(659.25,.15,.18); tone(783.99,.30,.18); tone(1046.5,.45,.5);
+      // Big celebratory fanfare — long and climactic
+      noise(0,.05,.9);
+      tone(261.63,0,.08,.5);
+      tone(523.25,.05,.22,1.0);
+      tone(659.25,.22,.22,1.1);
+      tone(783.99,.40,.25,1.2);
+      tone(1046.5,.60,.55,1.3);
+      tone(1318.5,.85,.65,1.1);
+      tone(1046.5,1.25,.5,.9);
+    } else if(name==='hr_allowed'){
+      // Sad descending tones — pitcher gave one up
+      noise(0,.12,.7);
+      tone(392.0,0,.25,.8);
+      tone(329.63,.2,.3,.75);
+      tone(261.63,.45,.4,.7);
+      tone(196.0,.75,.55,.65);
+      tone(130.81,1.1,.75,.5);
     } else if(name==='hit'){
       tone(659.25,0,.22); tone(880,0.16,.35);
     } else if(name==='sb'){
@@ -324,7 +351,7 @@ function playSound(name){
 }
 
 function soundForEvent(type,role){
-  if(type==='HR') return 'hr';
+  if(type==='HR') return role==='pitcher'?'hr_allowed':'hr';
   if(['1B','2B','3B'].includes(type)) return 'hit';
   if(type==='SB') return 'sb';
   if(type==='K') return role==='pitcher'?'k_good':'k_bad';
@@ -336,9 +363,12 @@ function soundForEvent(type,role){
 const atBatSoundFired=new Set();
 const onDeckSoundFired=new Set();
 let sseReady=false; // suppress sounds on initial load
+let currentEs=null;
 
 function connectSSE(){
-  const es=new EventSource('/events');
+  if(currentEs) currentEs.close();
+  const es=new EventSource(`/events?team=${currentTeamId}`);
+  currentEs=es;
   es.addEventListener('state',e=>{
     const newState=JSON.parse(e.data);
     state=newState;
@@ -347,9 +377,13 @@ function connectSSE(){
     for(const[name,info] of Object.entries(state.liveStatus??{})){
       if(info.type==='batting'&&!atBatSoundFired.has(name)){
         atBatSoundFired.add(name);
-        if(sseReady) playSound('atbat');
+        if(sseReady){
+          playSound('atbat');
+          showToast({playerName:name,label:'Up to Bat',type:'atbat',role:'hitter',
+            inning:info.inning||'',gameLabel:info.gameLabel||'',desc:info.count?`Count: ${info.count}`:'Now batting'});
+        }
       }
-      // on-deck: no sound (too frequent/noisy)
+      // on-deck: no sound, no toast
     }
     for(const name of [...atBatSoundFired]){
       if(!state.liveStatus[name]||state.liveStatus[name].type!=='batting')
@@ -491,12 +525,12 @@ function groupHdr(label){
 function slotBody(player, liveInfo, s, isPit){
   if(!player) return `<div class="slot-empty"><div class="empty-plus">+</div>drop player here</div>`;
 
-  const teamBadge=player.teamAbbr?`<span class="team-badge">${esc(player.teamAbbr)}</span>`:'';
+  const teamTag=player.teamAbbr?`<span class="player-team-tag">${esc(player.teamAbbr)}</span>`:'';
   const photoUrl=playerHeadshot(player.mlbId);
   const initial=lastName(player.name).charAt(0).toUpperCase();
   const photoHtml=`<div class="slot-photo-wrap">
     <span class="photo-initial">${initial}</span>
-    ${photoUrl?`<img src="${photoUrl}" alt="" loading="lazy" onerror="onHeadshotError(this,${player.mlbId??'null'})">`:``}
+    ${photoUrl?`<img src="${photoUrl}" alt="" loading="lazy" onerror="onHeadshotError(this,${player.mlbId??'null'},0)">`:``}
   </div>`;
 
   let statusLine='';
@@ -516,22 +550,28 @@ function slotBody(player, liveInfo, s, isPit){
 
   return `${photoHtml}<div class="slot-info">
     <div class="slot-name-row">
-      <span class="slot-name">${esc(player.name)}${teamBadge}</span>
+      <span class="slot-name">${esc(player.name)}</span>${teamTag}
     </div>
     ${statLine}
     ${statusLine}
   </div>`;
 }
 
+function statCls(val, threshold=3){
+  if(!val||val<=0) return '';
+  return val>threshold?'sg-bright':'sg-good';
+}
+
 function buildStatLine(s, isPit){
   if(isPit){
     const ip  = `${Math.floor((s?.outs??0)/3)}.${(s?.outs??0)%3}`;
     const ha  = s?.ha??0;
+    const er  = s?.er??0;
     const k   = s?.k??0;
     const bb  = s?.bb??0;
     const w   = s?.w??0;
     const sv  = s?.sv??0;
-    const er  = s?.er??0;
+
     const era = (s?.era!=null&&s?.outs>0) ? s.era.toFixed(2) : '-.--';
     const whip= (s?.whip!=null&&s?.outs>0) ? s.whip.toFixed(2) : '-.--';
     const wCls  = w   ? 'sg-good' : '';
@@ -543,11 +583,11 @@ function buildStatLine(s, isPit){
     return`<div class="stat-grid stat-grid-pit">
       <span class="sg-c">${ip}<span class="sg-l">IP</span></span>
       <span class="sg-c">${ha}<span class="sg-l">H</span></span>
+      <span class="sg-c ${erCls}">${er}<span class="sg-l">ER</span></span>
       <span class="sg-c ${kCls}">${k}<span class="sg-l">K</span></span>
       <span class="sg-c ${bbCls}">${bb}<span class="sg-l">BB</span></span>
       <span class="sg-c ${wCls}">${w}<span class="sg-l">W</span></span>
       <span class="sg-c ${svCls}">${sv}<span class="sg-l">SV</span></span>
-      <span class="sg-c ${erCls}">${er}<span class="sg-l">ER</span></span>
       <span class="sg-c ${eraCls}">${era}<span class="sg-l">ERA</span></span>
       <span class="sg-c">${whip}<span class="sg-l">WHIP</span></span>
     </div>`;
@@ -562,12 +602,15 @@ function buildStatLine(s, isPit){
     const avgCls = ab>0 ? (h/ab>=.300?'sg-good':h/ab<.200?'sg-bad':'') : '';
     const hrCls  = hr  ? 'sg-hr' : '';
     const hCls   = h   ? 'sg-good' : '';
+    const rCls   = statCls(r);
+    const rbiCls = statCls(rbi);
+    const sbCls  = statCls(sb);
     return`<div class="stat-grid stat-grid-bat">
       <span class="sg-c ${hCls}">${h}/${ab}<span class="sg-l">H/AB</span></span>
-      <span class="sg-c">${r}<span class="sg-l">R</span></span>
+      <span class="sg-c ${rCls}">${r}<span class="sg-l">R</span></span>
       <span class="sg-c ${hrCls}">${hr}<span class="sg-l">HR</span></span>
-      <span class="sg-c">${rbi}<span class="sg-l">RBI</span></span>
-      <span class="sg-c">${sb}<span class="sg-l">SB</span></span>
+      <span class="sg-c ${rbiCls}">${rbi}<span class="sg-l">RBI</span></span>
+      <span class="sg-c ${sbCls}">${sb}<span class="sg-l">SB</span></span>
       <span class="sg-c ${avgCls}">${avg}<span class="sg-l">AVG</span></span>
     </div>`;
   }
@@ -783,14 +826,14 @@ function onDragEnd(){
   document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
 }
 async function swapSlots(from,to){
-  await fetch('/api/roster/swap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from,to})});
+  await fetch(`/api/roster/swap?team=${currentTeamId}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from,to})});
   setTimeout(()=>{
     const el=document.querySelector(`[data-slot="${to}"]`);
     if(el){el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),650);}
   },50);
 }
 async function clearSlot(slotId){
-  await fetch(`/api/roster/slot/${encodeURIComponent(slotId)}`,{
+  await fetch(`/api/roster/slot/${encodeURIComponent(slotId)}?team=${currentTeamId}`,{
     method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({player:null})
   });
 }
@@ -846,7 +889,7 @@ async function selectPlayer(player){
   searchInput.value=''; acResults=[]; acIdx=-1;
   const slot=findBestSlot(player.pos);
   if(!slot){alert('Roster and bench are full!');return;}
-  await fetch(`/api/roster/slot/${encodeURIComponent(slot)}`,{
+  await fetch(`/api/roster/slot/${encodeURIComponent(slot)}?team=${currentTeamId}`,{
     method:'PUT',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({player:{name:player.name,pos:player.pos,teamAbbr:player.teamAbbr??'',mlbId:player.id}})
   });
@@ -890,6 +933,7 @@ function showToast(data){
   else if(['1B','2B','3B'].includes(data.type)) cls+=' t-hit';
   else if(data.type==='K'&&data.role==='pitcher') cls+=' t-k';
   else if(data.type==='SB') cls+=' t-sb';
+  else if(data.type==='atbat') cls+=' t-atbat';
   else cls+=' t-out';
   const el=document.createElement('div');
   el.className=cls;
@@ -901,7 +945,7 @@ function showToast(data){
   setTimeout(()=>{
     el.style.cssText='opacity:0;transform:translateX(18px);transition:opacity .35s,transform .35s';
     setTimeout(()=>el.remove(),350);
-  },7000);
+  },10000);
 }
 
 // ── Watch modal ───────────────────────────────────────────────────────────────
@@ -995,6 +1039,15 @@ function renderZoneSVG(pitches){
   svg.innerHTML=`<rect width="${W}" height="${H}" fill="#050810"/>`+inner;
 }
 
+const PITCH_TYPE_NAMES={
+  FF:'4-Seam Fastball',FT:'2-Seam Fastball',SI:'Sinker',FA:'Fastball',
+  FC:'Cut Fastball',SL:'Slider',ST:'Sweeper',SW:'Sweeping Curve',
+  CU:'Curveball',KC:'Knuckle Curve',CS:'Slow Curve',
+  CH:'Changeup',FS:'Split-Finger',FO:'Forkball',
+  KN:'Knuckleball',EP:'Eephus',
+};
+function pitchTypeName(code){ return PITCH_TYPE_NAMES[code]||code||'—'; }
+
 function renderPitchLog(pitches){
   const el=document.getElementById('pitch-log');
   if(!pitches.length){el.innerHTML='<div class="pl-waiting">⏳ Waiting for pitches…</div>';return;}
@@ -1007,16 +1060,16 @@ function renderPitchLog(pitches){
     </div>
     <div class="pl-table-wrap">
     <table class="pl-table">
-      <thead><tr><th>#</th><th>TYPE</th><th>VELO</th><th>RESULT</th></tr></thead>
+      <thead><tr><th>#</th><th>PITCH</th><th>VELO</th><th>RESULT</th></tr></thead>
       <tbody>
       ${pitches.map(p=>{
         const col=pitchColor(p.type);
         const resultCls=p.inPlay?'pl-in-play':p.isStrike?'pl-strike':p.isBall?'pl-ball':'';
         return`<tr class="${pitches[pitches.length-1]===p?'pl-last':''}">
           <td class="pl-num">${p.num}</td>
-          <td><span class="pl-type-badge" style="background:${col}22;color:${col};border-color:${col}55">${esc(p.type)}</span></td>
+          <td><span class="pl-type-badge" style="background:${col}22;color:${col};border-color:${col}55">${esc(pitchTypeName(p.type))}</span></td>
           <td class="pl-velo">${p.speed!=null?p.speed.toFixed(1)+'<span class="pl-unit">mph</span>':'—'}</td>
-          <td class="pl-result ${resultCls}">${esc((p.desc||'').slice(0,28))}</td></tr>`;
+          <td class="pl-result ${resultCls}">${esc((p.desc||'').slice(0,32))}</td></tr>`;
       }).join('')}
       </tbody>
     </table>
@@ -1178,7 +1231,22 @@ function fmtTime(ts){
   });
 })();
 
+function changeTeam(val){
+  currentTeamId = Number(val);
+  localStorage.setItem('mlb_team_id', currentTeamId);
+  slotKeys={};
+  lpBuilt=false;
+  renderedEvIds.clear();
+  const list = document.getElementById('feed-list');
+  if(list) list.innerHTML = `<div class="feed-empty"><div class="fe-icon">📡</div>Loading team...</div>`;
+  const lp = document.getElementById('lp');
+  if(lp) lp.innerHTML = `<div class="sg-loading">Loading roster...</div>`;
+  connectSSE();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+const tsSel=document.getElementById('team-select');
+if(tsSel) tsSel.value=String(currentTeamId);
 initVolumeUI();
 renderTodayStats();
 fetchScoreboard();

@@ -1,172 +1,342 @@
 {
-  "C1": {
-    "name": "J.T. Realmuto",
-    "norm": "j t realmuto",
-    "position": "C"
+  "1": {
+    "C1": {
+      "name": "J.T. Realmuto",
+      "norm": "j t realmuto",
+      "position": "C",
+      "mlbId": 592663,
+      "teamAbbr": ""
+    },
+    "C2": {
+      "name": "Liam Hicks",
+      "norm": "liam hicks",
+      "position": "C",
+      "mlbId": 689414,
+      "teamAbbr": ""
+    },
+    "1B": {
+      "name": "Rafael Devers",
+      "norm": "rafael devers",
+      "position": "1B",
+      "mlbId": 646240,
+      "teamAbbr": ""
+    },
+    "2B": {
+      "name": "Ildemaro Vargas",
+      "norm": "ildemaro vargas",
+      "position": "1B",
+      "mlbId": 545121,
+      "teamAbbr": ""
+    },
+    "3B": {
+      "name": "Junior Caminero",
+      "norm": "junior caminero",
+      "position": "3B",
+      "mlbId": 691406,
+      "teamAbbr": ""
+    },
+    "SS": {
+      "name": "Ezequiel Tovar",
+      "norm": "ezequiel tovar",
+      "position": "SS",
+      "teamAbbr": "",
+      "mlbId": 678662
+    },
+    "MI": {
+      "name": "J.P. Crawford",
+      "norm": "j p crawford",
+      "position": "SS",
+      "mlbId": 641487,
+      "teamAbbr": ""
+    },
+    "CI": {
+      "name": "Jonathan Aranda",
+      "norm": "jonathan aranda",
+      "position": "1B",
+      "mlbId": 666018,
+      "teamAbbr": ""
+    },
+    "OF1": {
+      "name": "George Springer",
+      "norm": "george springer",
+      "position": "DH",
+      "mlbId": 543807,
+      "teamAbbr": ""
+    },
+    "OF2": {
+      "name": "Luke Raley",
+      "norm": "luke raley",
+      "position": "RF",
+      "mlbId": 670042,
+      "teamAbbr": ""
+    },
+    "OF3": {
+      "name": "Jarren Duran",
+      "norm": "jarren duran",
+      "position": "LF",
+      "teamAbbr": "",
+      "mlbId": 680776
+    },
+    "OF4": {
+      "name": "Spencer Jones",
+      "norm": "spencer jones",
+      "position": "RF",
+      "teamAbbr": "",
+      "mlbId": 682987
+    },
+    "OF5": {
+      "name": "Yohendrick Piñango",
+      "norm": "yohendrick pinango",
+      "position": "LF",
+      "teamAbbr": "",
+      "mlbId": 682818
+    },
+    "UTIL": {
+      "name": "Kyle Schwarber",
+      "norm": "kyle schwarber",
+      "position": "LF",
+      "mlbId": 656941,
+      "teamAbbr": ""
+    },
+    "P1": {
+      "name": "Bryce Miller",
+      "norm": "bryce miller",
+      "position": "P",
+      "teamAbbr": "",
+      "mlbId": 682243
+    },
+    "P2": {
+      "name": "Noah Cameron",
+      "norm": "noah cameron",
+      "position": "P",
+      "mlbId": 702070,
+      "teamAbbr": ""
+    },
+    "P3": {
+      "name": "Roki Sasaki",
+      "norm": "roki sasaki",
+      "position": "P",
+      "mlbId": 808963,
+      "teamAbbr": ""
+    },
+    "P4": {
+      "name": "Andrew Abbott",
+      "norm": "andrew abbott",
+      "position": "P",
+      "mlbId": 671096,
+      "teamAbbr": ""
+    },
+    "P5": {
+      "name": "Mitch Keller",
+      "norm": "mitch keller",
+      "position": "P",
+      "mlbId": 656605,
+      "teamAbbr": ""
+    },
+    "P6": {
+      "name": "Tanner Scott",
+      "norm": "tanner scott",
+      "position": "P",
+      "mlbId": 656945,
+      "teamAbbr": ""
+    },
+    "P7": {
+      "name": "Zebby Matthews",
+      "norm": "zebby matthews",
+      "position": "P",
+      "teamAbbr": "",
+      "mlbId": 805673
+    },
+    "P8": {
+      "name": "Tony Santillan",
+      "norm": "tony santillan",
+      "position": "P",
+      "teamAbbr": "",
+      "mlbId": 663574
+    },
+    "P9": {
+      "name": "Nick Lodolo",
+      "norm": "nick lodolo",
+      "position": "P",
+      "teamAbbr": "",
+      "mlbId": 666157
+    },
+    "BN1": {
+      "name": "Francisco Lindor",
+      "norm": "francisco lindor",
+      "position": "SS",
+      "mlbId": 596019,
+      "teamAbbr": ""
+    },
+    "BN2": {
+      "name": "Caleb Durbin",
+      "norm": "caleb durbin",
+      "position": "3B",
+      "mlbId": 702332,
+      "teamAbbr": ""
+    },
+    "BN3": {
+      "name": "Luis Robert Jr.",
+      "norm": "luis robert",
+      "position": "CF",
+      "teamAbbr": "",
+      "mlbId": 673357
+    },
+    "BN4": {
+      "name": "Masyn Winn",
+      "norm": "masyn winn",
+      "position": "SS",
+      "mlbId": 691026,
+      "teamAbbr": ""
+    },
+    "BN5": {
+      "name": "Cole Ragans",
+      "norm": "cole ragans",
+      "position": "P",
+      "mlbId": 666142,
+      "teamAbbr": ""
+    },
+    "BN6": {
+      "name": "Tarik Skubal",
+      "norm": "tarik skubal",
+      "position": "P",
+      "mlbId": 669373,
+      "teamAbbr": ""
+    },
+    "BN7": {
+      "name": "Josh Hader",
+      "norm": "josh hader",
+      "position": "P",
+      "teamAbbr": "",
+      "mlbId": 623352
+    }
   },
-  "C2": {
-    "name": "Liam Hicks",
-    "norm": "liam hicks",
-    "position": "C"
+  "2": {
+    "C1": null,
+    "C2": null,
+    "1B": null,
+    "2B": null,
+    "3B": null,
+    "SS": null,
+    "MI": null,
+    "CI": null,
+    "OF1": null,
+    "OF2": null,
+    "OF3": null,
+    "OF4": null,
+    "OF5": null,
+    "UTIL": null,
+    "P1": null,
+    "P2": null,
+    "P3": null,
+    "P4": null,
+    "P5": null,
+    "P6": null,
+    "P7": null,
+    "P8": null,
+    "P9": null,
+    "BN1": null,
+    "BN2": null,
+    "BN3": null,
+    "BN4": null,
+    "BN5": null,
+    "BN6": null,
+    "BN7": null
   },
-  "1B": {
-    "name": "Rafael Devers",
-    "norm": "rafael devers",
-    "position": "1B"
+  "3": {
+    "C1": null,
+    "C2": null,
+    "1B": null,
+    "2B": null,
+    "3B": null,
+    "SS": null,
+    "MI": null,
+    "CI": null,
+    "OF1": null,
+    "OF2": null,
+    "OF3": null,
+    "OF4": null,
+    "OF5": null,
+    "UTIL": null,
+    "P1": null,
+    "P2": null,
+    "P3": null,
+    "P4": null,
+    "P5": null,
+    "P6": null,
+    "P7": null,
+    "P8": null,
+    "P9": null,
+    "BN1": null,
+    "BN2": null,
+    "BN3": null,
+    "BN4": null,
+    "BN5": null,
+    "BN6": null,
+    "BN7": null
   },
-  "2B": {
-    "name": "Ildemaro Vargas",
-    "norm": "ildemaro vargas",
-    "position": "1B"
+  "4": {
+    "C1": null,
+    "C2": null,
+    "1B": null,
+    "2B": null,
+    "3B": null,
+    "SS": null,
+    "MI": null,
+    "CI": null,
+    "OF1": null,
+    "OF2": null,
+    "OF3": null,
+    "OF4": null,
+    "OF5": null,
+    "UTIL": null,
+    "P1": null,
+    "P2": null,
+    "P3": null,
+    "P4": null,
+    "P5": null,
+    "P6": null,
+    "P7": null,
+    "P8": null,
+    "P9": null,
+    "BN1": null,
+    "BN2": null,
+    "BN3": null,
+    "BN4": null,
+    "BN5": null,
+    "BN6": null,
+    "BN7": null
   },
-  "3B": {
-    "name": "Junior Caminero",
-    "norm": "junior caminero",
-    "position": "3B"
-  },
-  "SS": {
-    "name": "Ezequiel Tovar",
-    "norm": "ezequiel tovar",
-    "position": "SS",
-    "teamAbbr": "",
-    "mlbId": 678662
-  },
-  "MI": {
-    "name": "J.P. Crawford",
-    "norm": "j p crawford",
-    "position": "SS"
-  },
-  "CI": {
-    "name": "Jonathan Aranda",
-    "norm": "jonathan aranda",
-    "position": "1B"
-  },
-  "OF1": {
-    "name": "George Springer",
-    "norm": "george springer",
-    "position": "DH"
-  },
-  "OF2": {
-    "name": "Luke Raley",
-    "norm": "luke raley",
-    "position": "RF"
-  },
-  "OF3": {
-    "name": "Jarren Duran",
-    "norm": "jarren duran",
-    "position": "LF",
-    "teamAbbr": "",
-    "mlbId": 680776
-  },
-  "OF4": {
-    "name": "Spencer Jones",
-    "norm": "spencer jones",
-    "position": "RF",
-    "teamAbbr": "",
-    "mlbId": 682987
-  },
-  "OF5": {
-    "name": "Yohendrick Piñango",
-    "norm": "yohendrick pinango",
-    "position": "LF",
-    "teamAbbr": "",
-    "mlbId": 682818
-  },
-  "UTIL": {
-    "name": "Kyle Schwarber",
-    "norm": "kyle schwarber",
-    "position": "LF"
-  },
-  "P1": {
-    "name": "Bryce Miller",
-    "norm": "bryce miller",
-    "position": "P",
-    "teamAbbr": "",
-    "mlbId": 682243
-  },
-  "P2": {
-    "name": "Noah Cameron",
-    "norm": "noah cameron",
-    "position": "P"
-  },
-  "P3": {
-    "name": "Roki Sasaki",
-    "norm": "roki sasaki",
-    "position": "P"
-  },
-  "P4": {
-    "name": "Andrew Abbott",
-    "norm": "andrew abbott",
-    "position": "P"
-  },
-  "P5": {
-    "name": "Mitch Keller",
-    "norm": "mitch keller",
-    "position": "P"
-  },
-  "P6": {
-    "name": "Tanner Scott",
-    "norm": "tanner scott",
-    "position": "P"
-  },
-  "P7": {
-    "name": "Zebby Matthews",
-    "norm": "zebby matthews",
-    "position": "P",
-    "teamAbbr": "",
-    "mlbId": 805673
-  },
-  "P8": {
-    "name": "Tony Santillan",
-    "norm": "tony santillan",
-    "position": "P",
-    "teamAbbr": "",
-    "mlbId": 663574
-  },
-  "P9": {
-    "name": "Nick Lodolo",
-    "norm": "nick lodolo",
-    "position": "P",
-    "teamAbbr": "",
-    "mlbId": 666157
-  },
-  "BN1": {
-    "name": "Francisco Lindor",
-    "norm": "francisco lindor",
-    "position": "SS"
-  },
-  "BN2": {
-    "name": "Caleb Durbin",
-    "norm": "caleb durbin",
-    "position": "3B"
-  },
-  "BN3": {
-    "name": "Luis Robert Jr.",
-    "norm": "luis robert",
-    "position": "CF",
-    "teamAbbr": "",
-    "mlbId": 673357
-  },
-  "BN4": {
-    "name": "Masyn Winn",
-    "norm": "masyn winn",
-    "position": "SS"
-  },
-  "BN5": {
-    "name": "Cole Ragans",
-    "norm": "cole ragans",
-    "position": "P"
-  },
-  "BN6": {
-    "name": "Tarik Skubal",
-    "norm": "tarik skubal",
-    "position": "P"
-  },
-  "BN7": {
-    "name": "Josh Hader",
-    "norm": "josh hader",
-    "position": "P",
-    "teamAbbr": "",
-    "mlbId": 623352
+  "5": {
+    "C1": null,
+    "C2": null,
+    "1B": null,
+    "2B": null,
+    "3B": null,
+    "SS": null,
+    "MI": null,
+    "CI": null,
+    "OF1": null,
+    "OF2": null,
+    "OF3": null,
+    "OF4": null,
+    "OF5": null,
+    "UTIL": null,
+    "P1": null,
+    "P2": null,
+    "P3": null,
+    "P4": null,
+    "P5": null,
+    "P6": null,
+    "P7": null,
+    "P8": null,
+    "P9": null,
+    "BN1": null,
+    "BN2": null,
+    "BN3": null,
+    "BN4": null,
+    "BN5": null,
+    "BN6": null,
+    "BN7": null
   }
 }

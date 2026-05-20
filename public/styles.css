@@ -265,11 +265,57 @@ body {
 #status-txt { font-size: 12px; color: var(--dim); font-family: var(--fn-mono); }
 #poll-eta   { font-size: 10px; color: var(--dim2); font-family: var(--fn-mono); }
 
-/* Today Stats Strip */
-#today-stats {
-  border-top: 1px solid var(--border);
-  padding: 5px 0;
+/* Team Selector */
+#team-select-wrap {
+  display: flex;
+  align-items: center;
+  margin: 0 12px;
+  flex-shrink: 0;
 }
+#team-select {
+  background: var(--surf2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--bright);
+  font-family: var(--fn-body);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 22px 4px 8px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background-color .15s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%23f59e0b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+#team-select:hover {
+  background-color: var(--surf3);
+  border-color: var(--border);
+}
+#team-select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold-dim);
+}
+
+/* Today Stats — inline in header */
+#today-stats-inline {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+#today-stats-inline .ts-grid {
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#today-stats-inline .ts-grid::-webkit-scrollbar { display: none; }
 .ts-grid {
   display: flex;
   gap: 0;
@@ -297,7 +343,7 @@ body {
 }
 .ts-val {
   font-family: var(--fn-mono);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--dim);
   line-height: 1.2;
@@ -305,7 +351,7 @@ body {
 .ts-val.nonzero { color: var(--gold); }
 .ts-label {
   font-family: var(--fn-display);
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 1px;
   color: var(--dim2);
   margin-top: 1px;
@@ -649,12 +695,12 @@ body {
 
 /* Photo */
 .slot-photo-wrap {
-  width: 28px;
-  height: 28px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
-  border: 1px solid var(--border2);
+  border: 1.5px solid var(--border2);
   background: var(--surf3);
   position: relative;
   transition: border-color .2s, box-shadow .2s;
@@ -662,11 +708,12 @@ body {
 
 .slot-photo-wrap img {
   position: absolute;
-  inset: 0;
-  width: 120%;
-  height: 120%;
-  object-fit: contain;
-  object-position: center 10%;
+  width: 100%;
+  height: 130%;
+  object-fit: cover;
+  object-position: center 8%;
+  top: -5px;
+  left: 0;
 }
 .photo-initial {
   position: absolute;
@@ -675,7 +722,7 @@ body {
   align-items: center;
   justify-content: center;
   font-family: var(--fn-display);
-  font-size: 15px;
+  font-size: 20px;
   color: var(--dim);
 }
 
@@ -699,17 +746,19 @@ body {
   text-overflow: ellipsis;
   flex-shrink: 1;
 }
-.team-badge {
+/* Player team tag — inline after name, dash-separated style */
+.player-team-tag {
   font-family: var(--fn-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 2px 5px;
-  border-radius: 3px;
-  background: var(--surf3);
   color: var(--dim);
-  border: 1px solid var(--border2);
   letter-spacing: .5px;
   flex-shrink: 0;
+  white-space: nowrap;
+}
+.player-team-tag::before {
+  content: ' - ';
+  color: var(--dim2);
 }
 
 .live-pip {
@@ -756,10 +805,21 @@ body {
   margin-top: 0;
   line-height: 1;
 }
-.sg-good { color: var(--green); }
-.sg-bad  { color: var(--red); }
-.sg-hr   { color: var(--orange); font-weight: 700; }
+.sg-good  { color: var(--green); }
+.sg-bad   { color: var(--red); }
+.sg-hr    { color: var(--orange); font-weight: 700; }
 .sg-avg-dim { color: var(--dim); }
+/* Bright gold glow for stats > threshold (R/RBI/SB > 3) */
+.sg-bright {
+  color: var(--gold);
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(245,158,11,.7), 0 0 16px rgba(245,158,11,.4);
+  animation: stat-pulse 2.5s ease-in-out infinite;
+}
+@keyframes stat-pulse {
+  0%, 100% { text-shadow: 0 0 8px rgba(245,158,11,.7), 0 0 16px rgba(245,158,11,.4); }
+  50%       { text-shadow: 0 0 14px rgba(245,158,11,1),  0 0 28px rgba(245,158,11,.7); }
+}
 
 .slot-live-line {
   font-size: 12px;
@@ -1071,6 +1131,7 @@ body {
 .t-hit  { border-left-color: var(--green); }
 .t-k    { border-left-color: var(--blue); }
 .t-sb   { border-left-color: var(--teal); }
+.t-atbat { border-left-color: var(--gold); background: linear-gradient(90deg, rgba(245,158,11,.06) 0%, var(--surf2) 60%); }
 .t-out  { border-left-color: var(--dim2); }
 .toast-title { font-weight: 700; font-size: 13px; color: var(--bright); }
 .toast-sub   { font-size: 11px; color: var(--dim); margin-top: 2px; }
@@ -1083,8 +1144,8 @@ body {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.88);
-  backdrop-filter: blur(6px);
+  background: rgba(0,0,0,.52);
+  backdrop-filter: blur(3px);
   z-index: 800;
   align-items: center;
   justify-content: center;
@@ -1315,6 +1376,10 @@ body {
 .pl-velo { font-family: var(--fn-mono); font-size: 11px; color: var(--text); white-space: nowrap; }
 .pl-unit { font-size: 9px; color: var(--dim); }
 .pl-result { font-size: 10px; color: var(--dim); max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Wider column for full pitch names */
+.pl-table thead th:nth-child(2),
+.pl-table tbody td:nth-child(2) { max-width: 140px; }
+.pl-type-badge { white-space: nowrap; display: inline-block; }
 .pl-ball    { color: var(--green); }
 .pl-strike  { color: var(--red); }
 .pl-in-play { color: var(--gold); font-weight: 600; }

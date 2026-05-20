@@ -157,19 +157,67 @@ async function ensurePlayerDB() {
   }
   playerDB=[ ...byId.values() ]; playerDBDate=today;
   console.log(`[PlayerDB] Total: ${playerDB.length} unique players`);
+
+  // Enrich slots with missing details from playerDB for all 5 teams
+  let changed = false;
+  for (let t = 1; t <= 5; t++) {
+    for (const slotId of Object.keys(slots[t])) {
+      const p = slots[t][slotId];
+      if (p && (!p.mlbId || !p.teamAbbr || !p.position || p.position === 'UNK')) {
+        const match = playerDB.find(dbP => dbP.norm === normalize(p.name));
+        if (match) {
+          p.mlbId = match.id;
+          if (!p.teamAbbr) p.teamAbbr = match.teamAbbr;
+          if (!p.position || p.position === 'UNK') p.position = match.pos;
+          changed = true;
+        }
+      }
+    }
+  }
+  if (changed) {
+    saveSlots();
+  }
 }
 
 // ─── Slots persistence ─────────────────────────────────────────────────────────
-let slots={};
+let slots = {
+  1: {},
+  2: {},
+  3: {},
+  4: {},
+  5: {}
+};
 
 function loadSlots() {
-  SLOT_DEFS.forEach(d=>{ slots[d.id]=null; });
+  for (let t = 1; t <= 5; t++) {
+    slots[t] = {};
+    SLOT_DEFS.forEach(d => { slots[t][d.id] = null; });
+  }
   try {
     if (fs.existsSync(SLOTS_FILE)) {
-      const raw=JSON.parse(fs.readFileSync(SLOTS_FILE,'utf8'));
-      SLOT_DEFS.forEach(d=>{ if(raw[d.id]!==undefined) slots[d.id]=raw[d.id]; });
+      const raw = JSON.parse(fs.readFileSync(SLOTS_FILE, 'utf8'));
+      // Check if it's old format (directly keys of slots like "C1")
+      const isOldFormat = Object.keys(raw).some(key => SLOT_DEFS.some(d => d.id === key)) && !raw["1"];
+      
+      if (isOldFormat) {
+        console.log("[Migration] Migrating old slots.json format to multi-team format (Team 1)");
+        SLOT_DEFS.forEach(d => {
+          if (raw[d.id] !== undefined) slots[1][d.id] = raw[d.id];
+        });
+        saveSlots();
+      } else {
+        for (let t = 1; t <= 5; t++) {
+          if (raw[t]) {
+            SLOT_DEFS.forEach(d => {
+              if (raw[t][d.id] !== undefined) slots[t][d.id] = raw[t][d.id];
+            });
+          }
+        }
+      }
     }
-  } catch(_) {}
+  } catch(e) {
+    console.error("[loadSlots] Error:", e);
+  }
 }
 
 function saveSlots() {
@@ -181,13 +229,16 @@ loadSlots();
 
 function getTrackedPlayers() {
   const players=[], seen=new Set();
-  for (const def of SLOT_DEFS) {
-    if (def.group==='bench') continue;
-    const p=slots[def.id]; if(!p) continue;
-    const norm=normalize(p.name);
-    if (seen.has(norm)) continue;
-    seen.add(norm);
-    players.push({ name:p.name, norm, isPitcher:def.group==='pitcher' });
+  for (let t = 1; t <= 5; t++) {
+    const teamSlots = slots[t] || {};
+    for (const def of SLOT_DEFS) {
+      if (def.group==='bench') continue;
+      const p=teamSlots[def.id]; if(!p) continue;
+      const norm=normalize(p.name);
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      players.push({ name:p.name, norm, isPitcher:def.group==='pitcher' });
+    }
   }
   return players;
 }
@@ -610,21 +661,47 @@ class Tracker {
       }
     }
 
-    if (isSB(play)&&!player.isPitcher) {
-      for (const runner of runners) {
-        if (Number(runner?.details?.runner?.id)===map.apiId&&runner?.movement?.end!=='out') {
-          entries.push({
-            id:`${gameId}:sb:${map.apiId}:${idx}`,ts,
-            playerName:player.name,role:'hitter',
-            type:'SB',label:'Stolen Base',
-            desc:String(play.result?.description??'').trim(),
-            inning:inn,gameLabel:label,vs:'',
-            isHit:false,countsAsAb:false,rbi:0,runs:0,outsRecorded:0,runsAllowed:0,
-          });
-          break;
+      // ── Stolen Bases ─────────────────────────────────────
+      if (!player.isPitcher) {
+        for (const runner of runners) {
+
+          const runnerId = Number(runner?.details?.runner?.id);
+
+          const runnerEvent = String(
+            runner?.details?.eventType ??
+            runner?.movement?.event ??
+            ''
+          ).toLowerCase();
+
+          const isStolenBase =
+            runnerEvent.includes('stolen_base') ||
+            runnerEvent.includes('stolen base');
+
+          if (runnerId === map.apiId && isStolenBase) {
+
+            entries.push({
+              id:`${gameId}:sb:${map.apiId}:${idx}`,
+              ts,
+              playerName:player.name,
+              role:'hitter',
+              type:'SB',
+              label:'Stolen Base',
+              desc:String(play.result?.description ?? '').trim(),
+              inning:inn,
+              gameLabel:label,
+              vs:'',
+              isHit:false,
+              countsAsAb:false,
+              rbi:0,
+              runs:0,
+              outsRecorded:0,
+              runsAllowed:0,
+            });
+
+            break;
+          }
         }
       }
-    }
 
     // Run scored as a baserunner on someone else's at-bat.
     // The batter block already captures runs from the player's OWN PA,
@@ -671,41 +748,106 @@ const app=express(), tracker=new Tracker(), clients=new Set();
 app.use(express.json());
 app.use(express.static(PUB_DIR));
 
+function isPlayerOnTeam(playerName, teamId) {
+  const teamSlots = slots[teamId] || {};
+  const norm = normalize(playerName);
+  return Object.values(teamSlots).some(p => p && normalize(p.name) === norm);
+}
+
+function getLiveStatusForTeam(teamId) {
+  const teamLiveStatus = {};
+  for (const [name, status] of Object.entries(tracker.liveStatus)) {
+    if (isPlayerOnTeam(name, teamId)) {
+      teamLiveStatus[name] = status;
+    }
+  }
+  return teamLiveStatus;
+}
+
+function getActiveGamePlayersForTeam(teamId) {
+  const teamSlots = slots[teamId] || {};
+  return [...tracker.activeGamePlayers].filter(norm => {
+    return Object.values(teamSlots).some(p => p && normalize(p.name) === norm);
+  });
+}
+
+function computeStatsForTeam(teamId) {
+  const allStats = tracker.computeStats();
+  const teamStats = {};
+  for (const [name, s] of Object.entries(allStats)) {
+    if (isPlayerOnTeam(name, teamId)) {
+      teamStats[name] = s;
+    }
+  }
+  return teamStats;
+}
+
 app.get('/events',(req,res)=>{
+  const teamId = Number(req.query.team || 1);
+  res.teamId = teamId;
   res.setHeader('Content-Type','text/event-stream');
   res.setHeader('Cache-Control','no-cache');
   res.setHeader('Connection','keep-alive');
   res.setHeader('X-Accel-Buffering','no');
   res.flushHeaders();
-  try{res.write(`event: state\ndata: ${JSON.stringify(buildState())}\n\n`);}catch(_){}
+  try{res.write(`event: state\ndata: ${JSON.stringify(buildState(teamId))}\n\n`);}catch(_){}
   clients.add(res); req.on('close',()=>clients.delete(res));
 });
 
 function broadcast(event,data){
-  const msg=`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of clients){try{res.write(msg);}catch(_){clients.delete(res);}}
+  if (event === 'state') {
+    for (const res of clients) {
+      try {
+        const teamId = res.teamId || 1;
+        const msg = `event: state\ndata: ${JSON.stringify(buildState(teamId))}\n\n`;
+        res.write(msg);
+      } catch(_) {
+        clients.delete(res);
+      }
+    }
+  } else if (event === 'toast') {
+    for (const res of clients) {
+      try {
+        const teamId = res.teamId || 1;
+        if (isPlayerOnTeam(data.playerName, teamId)) {
+          const msg = `event: toast\ndata: ${JSON.stringify(data)}\n\n`;
+          res.write(msg);
+        }
+      } catch(_) {
+        clients.delete(res);
+      }
+    }
+  } else {
+    const msg=`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of clients){try{res.write(msg);}catch(_){clients.delete(res);}}
+  }
 }
 
-function buildState(){
-  // Map playerName → game abstractGameState ('Preview'|'Live'|'Final')
+function buildState(teamId = 1){
+  const teamSlots = slots[teamId] || {};
+  // Map playerName → game abstractGameState ('Preview'|Live'|'Final')
   const playerGameStates={};
   for (const def of SLOT_DEFS) {
     if (def.group==='bench') continue;
-    const p=slots[def.id]; if(!p) continue;
+    const p=teamSlots[def.id]; if(!p) continue;
     const map=tracker.playerGameMap.get(normalize(p.name));
     if(!map) continue;
     const score=tracker.gameScores[map.gameId];
     if(score) playerGameStates[p.name]=score.status;
   }
   return{
-    slots,slotDefs:SLOT_DEFS,
-    events:tracker.events.slice(0,120),
-    stats:tracker.computeStats(),
-    liveStatus:tracker.liveStatus,
-    activeGamePlayers:[...tracker.activeGamePlayers],
-    gameScores:tracker.gameScores??{},
+    slots: teamSlots,
+    slotDefs: SLOT_DEFS,
+    events: tracker.events.filter(e => isPlayerOnTeam(e.playerName, teamId)).slice(0,120),
+    stats: computeStatsForTeam(teamId),
+    liveStatus: getLiveStatusForTeam(teamId),
+    activeGamePlayers: getActiveGamePlayersForTeam(teamId),
+    gameScores: tracker.gameScores??{},
     playerGameStates,
-    pollMs:tracker.lastPollMs,error:tracker.lastError,ts:Date.now(),
+    pollMs: tracker.lastPollMs,
+    error: tracker.lastError,
+    ts: Date.now(),
+    teamId,
   };
 }
 
@@ -717,31 +859,42 @@ app.get('/api/players/search',async(req,res)=>{
 });
 
 app.put('/api/roster/slot/:slotId',(req,res)=>{
+  const teamId = Number(req.query.team || 1);
   const def=SLOT_MAP[req.params.slotId];
   if(!def) return res.status(400).json({error:'Invalid slot'});
   const p=req.body?.player??null;
-  const prevNorm=slots[def.id]?.norm;
+  const prevNorm=slots[teamId][def.id]?.norm;
   if(p){
-    slots[def.id]={name:p.name.trim(),norm:normalize(p.name),position:p.pos??'UNK',
+    slots[teamId][def.id]={name:p.name.trim(),norm:normalize(p.name),position:p.pos??'UNK',
       teamAbbr:p.teamAbbr??'',mlbId:p.mlbId?Number(p.mlbId):null};
-  }else{slots[def.id]=null;}
-  if (prevNorm && prevNorm !== slots[def.id]?.norm) {
-    tracker.playerGameMap.delete(prevNorm);
-    tracker.playerPlayIdx.delete(prevNorm);
-    tracker.playerCheckedGames.delete(prevNorm);
-    tracker.activeGamePlayers.delete(prevNorm);
+  }else{slots[teamId][def.id]=null;}
+  
+  if (prevNorm && prevNorm !== slots[teamId][def.id]?.norm) {
+    const anyoneElseTracking = Object.keys(slots).some(tid => {
+      return Object.values(slots[tid]).some(sp => sp && sp.norm === prevNorm);
+    });
+    if (!anyoneElseTracking) {
+      tracker.playerGameMap.delete(prevNorm);
+      tracker.playerPlayIdx.delete(prevNorm);
+      tracker.playerCheckedGames.delete(prevNorm);
+      tracker.activeGamePlayers.delete(prevNorm);
+    }
   }
-  saveSlots();broadcast('state',buildState());res.json({ok:true});
+  saveSlots();broadcast('state',null);res.json({ok:true});
 });
 
 app.post('/api/roster/swap',(req,res)=>{
+  const teamId = Number(req.query.team || 1);
   const{from,to}=req.body??{};
   if(!SLOT_MAP[from]||!SLOT_MAP[to]) return res.status(400).json({error:'Invalid slots'});
-  [slots[from],slots[to]]=[slots[to],slots[from]];
-  saveSlots();broadcast('state',buildState());res.json({ok:true});
+  [slots[teamId][from],slots[teamId][to]]=[slots[teamId][to],slots[teamId][from]];
+  saveSlots();broadcast('state',null);res.json({ok:true});
 });
 
-app.get('/api/state',(_req,res)=>res.json(buildState()));
+app.get('/api/state',(req,res)=>{
+  const teamId = Number(req.query.team || 1);
+  res.json(buildState(teamId));
+});
 
 app.get('/api/live-atbat/:gamePk',async(req,res)=>{
   try{
