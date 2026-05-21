@@ -820,19 +820,24 @@ body {
   align-items: baseline;
   gap: 7px;
   flex-wrap: nowrap;
+  align-self: flex-start;
 }
 .stat-grid-bat .sg-c {
   flex-direction: row;
   align-items: baseline;
   gap: 2px;
-  font-size: 14px;
+  font-size: 12px;
 }
 .stat-grid-bat .sg-l {
-  font-size: 14px;
+  font-size: 10px;
   margin-top: 0;
 }
 .stat-grid-pit {
-  grid-template-columns: 28px 20px 22px 22px 20px 20px 22px 36px 36px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
+  align-self: flex-start;
 }
 .sg-c {
   display: flex;
@@ -901,29 +906,44 @@ body {
 /* Actions */
 .slot-actions {
   display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 5px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px 5px 3px 3px;
   flex-shrink: 0;
+}
+.sa-top {
+  display: flex;
+  gap: 2px;
 }
 .btn-watch {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   background: var(--green-dim);
   border: 1px solid var(--green);
   color: var(--green);
   border-radius: var(--r);
-  padding: 3px 7px;
+  padding: 3px 4px;
   font-family: var(--fn-body);
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-  transition: background .15s;
+  transition: background .15s, color .15s, border-color .15s;
   letter-spacing: .5px;
+  width: 100%;
+  box-sizing: border-box;
 }
-.btn-watch:hover { background: rgba(34,197,94,.2); }
+.btn-watch:not(.btn-watch-dim):hover { background: rgba(34,197,94,.2); }
+.btn-watch.btn-watch-dim {
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--dim2);
+  cursor: default;
+  opacity: .55;
+}
 .btn-clear {
   background: transparent;
   border: 1px solid var(--border2);

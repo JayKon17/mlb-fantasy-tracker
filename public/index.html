@@ -483,10 +483,16 @@ function renderLineup(){
 
     const acts=document.getElementById(`sa-${def.id}`);
     if(acts){
-      const watchBtn=isLive?`<button class="btn-watch" onclick="openWatch(${liveInfo.gamePk})">📡 Watch</button>`:'';
       const isActive=focusPlayer===player?.name;
-      const focusBtn=player?`<button class="btn-focus${isActive?' is-active':''}" onclick="toggleFocus('${player.name.replace(/'/g,"\\'")}')" title="Filter log to this player">ℹ</button>`:'';
-      acts.innerHTML=watchBtn+focusBtn+(player?`<button class="btn-clear" onclick="clearSlot('${def.id}')">✕</button>`:'');
+      if(player){
+        const focusBtn=`<button class="btn-focus${isActive?' is-active':''}" onclick="toggleFocus('${player.name.replace(/'/g,"\\'")}')" title="Filter log to this player">ℹ</button>`;
+        const watchCls=isLive?'btn-watch':'btn-watch btn-watch-dim';
+        const watchAttr=isLive?` onclick="openWatch(${liveInfo.gamePk})"`:' disabled';
+        const watchBtn=`<button class="${watchCls}"${watchAttr}>📡 Watch</button>`;
+        acts.innerHTML=`<div class="sa-top">${focusBtn}<button class="btn-clear" onclick="clearSlot('${def.id}')">&#x2715;</button></div>${watchBtn}`;
+      } else {
+        acts.innerHTML='';
+      }
     }
   }
 
@@ -1275,6 +1281,17 @@ initVolumeUI();
 renderTodayStats();
 fetchScoreboard();
 scoreboardTimer=setInterval(fetchScoreboard,15_000);
+
+// Horizontal scroll on wheel hover over scoreboard
+(()=>{
+  const sc=document.getElementById('mlb-scores-inner');
+  if(!sc) return;
+  sc.addEventListener('wheel', e=>{
+    if(Math.abs(e.deltaX)>Math.abs(e.deltaY)) return; // already horizontal (trackpad)
+    e.preventDefault();
+    sc.scrollLeft+=e.deltaY;
+  },{passive:false});
+})();
 connectSSE();
 </script>
 </body>
