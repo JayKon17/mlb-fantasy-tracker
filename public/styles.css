@@ -1472,17 +1472,228 @@ body {
 }
 
 /* ════════════════════════════════════════════════════
-   RESPONSIVE
+   MOBILE: TAB BAR, PANELS, ACCUMULATOR
 ════════════════════════════════════════════════════ */
+#mobile-tab-bar,
+#mob-acc,
+#mob-panels {
+  display: none;
+}
+
 @media (max-width: 780px) {
+  /* ── Desktop layout hidden on mobile ── */
   #app {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto auto;
-    grid-template-areas: "hd" "lp" "dv" "fd";
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: unset;
+    grid-template-rows: unset;
+    grid-template-areas: unset;
     height: auto;
     overflow: visible;
   }
-  #divider { display: none; }
-  #lp { height: auto; overflow: visible; }
-  #fd { border-left: none; border-top: 1px solid var(--border); height: 50vh; }
+
+  /* Hide desktop panels — mobile uses #mob-panels instead */
+  #lp,
+  #fd,
+  #divider {
+    display: none !important;
+  }
+
+  #hd {
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* Compact header on mobile */
+  .hd-top {
+    min-height: 44px;
+    gap: 8px;
+    padding: 6px 0;
+  }
+
+  .brand {
+    font-size: 20px;
+    letter-spacing: 1px;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  .brand-icon { font-size: 17px; }
+
+  /* Hide desktop-only header elements */
+  #today-stats-inline,
+  #vol-wrap,
+  #poll-eta {
+    display: none;
+  }
+
+  #search-wrap {
+    flex: 1;
+    max-width: none;
+    min-width: 0;
+  }
+
+  #team-select-wrap {
+    margin: 0;
+    flex-shrink: 0;
+  }
+  #team-select { font-size: 9px; padding: 4px 18px 4px 6px; }
+  #btn-rename-team { width: 18px; height: 18px; font-size: 9px; }
+
+  #status-wrap { margin-left: 0; flex-shrink: 0; gap: 4px; }
+  #status-dot  { width: 7px; height: 7px; }
+  #status-txt  { font-size: 10px; }
+
+  /* Scores bar */
+  #mlb-scores-inner { padding: 4px 6px; }
+  .sg-card { min-width: 100px; padding: 4px 7px; }
+
+  /* ── Persistent accumulator bar ── */
+  #mob-acc {
+    display: block;
+    background: var(--surf2);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #mob-acc::-webkit-scrollbar { display: none; }
+  #mob-acc .ts-grid {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #mob-acc .ts-grid::-webkit-scrollbar { display: none; }
+  #mob-acc .ts-pair { padding: 2px 8px; }
+  #mob-acc .ts-val { font-size: 14px; }
+  #mob-acc .ts-label { font-size: 8px; }
+
+  /* ── Mobile tab panels ── */
+  #mob-panels {
+    display: block;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .mob-panel {
+    overflow-y: auto;
+    padding: 8px 10px 8px;
+    min-height: 0;
+  }
+
+  .mob-panel-hidden {
+    display: none !important;
+  }
+
+  /* Mobile feed panel */
+  #mob-fd-hdr {
+    font-family: var(--fn-display);
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    padding: 10px 12px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+  #mob-event-count {
+    font-family: var(--fn-mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  /* ── Mobile tab bar ── */
+  #mobile-tab-bar {
+    display: flex;
+    flex-shrink: 0;
+    background: var(--surf);
+    border-top: 1px solid var(--border);
+    height: 52px;
+    z-index: 100;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .mob-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: transparent;
+    border: none;
+    color: var(--dim);
+    font-family: var(--fn-display);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    transition: color .15s, background .15s;
+    position: relative;
+    padding: 4px 0;
+  }
+
+  .mob-tab::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: transparent;
+    border-radius: 0 0 2px 2px;
+    transition: background .15s;
+  }
+
+  .mob-tab svg { width: 20px; height: 20px; stroke-width: 1.75; }
+
+  .mob-tab:hover {
+    color: var(--text);
+    background: rgba(255,255,255,.03);
+  }
+
+  .mob-tab.mob-tab-active { color: var(--gold); }
+  .mob-tab.mob-tab-active::after { background: var(--gold); }
+  .mob-tab.mob-tab-active svg {
+    filter: drop-shadow(0 0 4px var(--gold-glow));
+  }
+
+  /* ── Compact slot rows on mobile ── */
+  .slot-row { min-height: 42px; }
+  .slot-photo-wrap { width: 40px; height: 40px; }
+  .slot-name { font-size: 15px; }
+  .stat-grid-bat { gap: 5px; }
+  .stat-grid-pit { gap: 4px; }
+  .sg-c { font-size: 11px; }
+
+  .bench-strip { gap: 4px; }
+  .bench-slot { min-width: 100px; padding: 4px 8px; font-size: 11px; }
+
+  /* Watch modal: full screen */
+  #watch-modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+  #watch-overlay.open { align-items: flex-start; }
+  #wm-body { flex-direction: column; min-height: unset; }
+  #zone-wrap { border-right: none; border-bottom: 1px solid var(--border); padding: 10px 12px; }
+  #zone-svg  { width: 160px; height: 192px; }
+
+  /* Toasts: above tab bar */
+  #toast-root { left: 10px; right: 10px; bottom: 62px; }
+  .toast { width: 100%; }
+
+  /* Add bottom padding so content isn't hidden behind fixed tab bar */
+  .mob-panel { padding-bottom: 60px; }
 }
