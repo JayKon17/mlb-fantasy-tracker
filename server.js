@@ -404,267 +404,434 @@ class Tracker {
     return stats;
   }
 
-  async poll(players) {
-    this._resetIfNewDay();
-    const t0=Date.now(); const newEvents=[];
-    this.liveStatus={}; this.activeGamePlayers.clear();
-    if (!players.length) { this.lastPollMs=0; return {newEvents}; }
+ async poll(players) {
+  this._resetIfNewDay();
+  const t0=Date.now(); const newEvents=[];
+  this.liveStatus={}; this.activeGamePlayers.clear();
+  if (!players.length) { this.lastPollMs=0; return {newEvents}; }
 
-    // Schedule
-    let games=[];
-    try {
-      const sched=await mlbFetch(`/api/v1/schedule?sportId=1&date=${this.dateKey}`);
-      games=sched?.dates?.[0]?.games??[];
-    } catch(e) { this.lastError=e.message; return {newEvents}; }
+  // Schedule
+  let games=[];
+  try {
+    const sched=await mlbFetch(`/api/v1/schedule?sportId=1&date=${this.dateKey}`);
+    games=sched?.dates?.[0]?.games??[];
+  } catch(e) { this.lastError=e.message; return {newEvents}; }
 
-    // Discovery
-    const unmapped=players.filter(p=>!this.playerGameMap.has(p.norm));
-    if (unmapped.length) {
-      for (const game of games) {
-        const needsCheck=unmapped.filter(p=>
-          !this.playerGameMap.has(p.norm) &&
-          !this.playerCheckedGames.get(p.norm)?.has(game.gamePk)
-        );
-        if (!needsCheck.length) continue;
-        try {
-          let apiPlayers=this.gameRosters.get(game.gamePk);
-          if (!apiPlayers) {
-            const bs=await mlbFetch(`/api/v1/game/${game.gamePk}/boxscore`);
-            apiPlayers=[];
-            for (const side of ['away','home']) {
-              for (const p of Object.values(bs?.teams?.[side]?.players??{})) {
-                if (p?.person?.fullName) apiPlayers.push({
-                  id:Number(p.person.id), name:p.person.fullName, norm:normalize(p.person.fullName),
-                });
-              }
-            }
-            this.gameRosters.set(game.gamePk,apiPlayers);
-          }
-          for (const p of needsCheck) {
-            if (!this.playerCheckedGames.has(p.norm)) this.playerCheckedGames.set(p.norm,new Set());
-            this.playerCheckedGames.get(p.norm).add(game.gamePk);
-            if (this.playerGameMap.has(p.norm)) continue;
-            const slotEntry=Object.values(slots).find(s=>s&&normalize(s.name)===p.norm);
-            const mlbId=slotEntry?.mlbId?Number(slotEntry.mlbId):null;
-            const match=mlbId?(apiPlayers.find(a=>a.id===mlbId)??null):matchPlayer(p.norm,apiPlayers);
-            if (match) {
-              this.playerGameMap.set(p.norm,{gameId:game.gamePk,apiId:Number(match.id),apiName:match.name});
-              console.log(`[Map] "${p.name}" (id=${match.id}) → game ${game.gamePk}`);
-            }
-          }
-        } catch(e) { console.warn(`[Discovery] game ${game.gamePk}:`,e.message); }
-        await sleep(60);
-      }
-        for (const p of unmapped) {
-          if (!this.playerGameMap.has(p.norm)) {
-            console.warn(`[Unresolved] "${p.name}" — not in today's games`);
-            // Mark all games as checked for this player to stop infinite rescanning
-            if (!this.playerCheckedGames.has(p.norm)) this.playerCheckedGames.set(p.norm, new Set());
-            for (const g of games) this.playerCheckedGames.get(p.norm).add(g.gamePk);
-          }
-}
-    }
+  // Discovery
+  const unmapped=players.filter(p=>!this.playerGameMap.has(p.norm));
+  if (unmapped.length) {
+    for (const game of games) {
+      const needsCheck=unmapped.filter(p=>
+        !this.playerGameMap.has(p.norm) &&
+        !this.playerCheckedGames.get(p.norm)?.has(game.gamePk)
+      );
+      if (!needsCheck.length) continue;
 
-    // Active / completed games for the current tracker day
-    const active=new Map();
-
-    for (const p of players) {
-      const map=this.playerGameMap.get(p.norm);
-      if (!map) continue;
-
-      const g=games.find(g=>g.gamePk===map.gameId);
-      if (!g) continue;
-
-      const st=g.status?.abstractGameState;
-
-      // Preview games have no completed plays yet, so skip them for event processing.
-      // Live and Final games should both be processed so the frontend works as
-      // a full-day recap.
-      if (st==='Preview') continue;
-
-      if (!active.has(map.gameId)) {
-        active.set(map.gameId,{
-          label:`${g.teams?.away?.team?.name} @ ${g.teams?.home?.team?.name}`,
-          status:st,
-          isLive:st==='Live',
-          isFinal:st==='Final',
-          players:[],
-        });
-      }
-      this.gameScores[map.gameId]={
-        away:g.teams?.away?.score??0,
-        awayAbbr:g.teams?.away?.team?.abbreviation??'',
-        home:g.teams?.home?.score??0,
-        homeAbbr:g.teams?.home?.team?.abbreviation??'',
-        status:st,
-      };
-
-      active.get(map.gameId).players.push(p);
-    }
-
-    // Play-by-play + linescore
-    for (const [gameId,{label,isLive,isFinal,status,players:gp}] of active) {
-      if (isLive) gp.forEach(p=>this.activeGamePlayers.add(p.norm));
       try {
-        const pbp=await mlbFetch(`/api/v1/game/${gameId}/playByPlay`);
-          const allPlays=pbp?.allPlays??[];
+        let apiPlayers=this.gameRosters.get(game.gamePk);
 
-          // Build per-player start indexes first.
-          //
-          // Important:
-          // - Newly mapped / newly tracked players must start at 0 so they can process
-          //   the full allPlays[] history on their first poll.
-          // - Existing indexed players can use the small rewind optimization.
-          const playerStarts = new Map();
+        if (!apiPlayers) {
+          const bs=await mlbFetch(`/api/v1/game/${game.gamePk}/boxscore`);
 
-          for (const player of gp) {
-            const hasIdx = this.playerPlayIdx.has(player.norm);
+          apiPlayers=[];
 
-            const startIdx = hasIdx
-              ? Math.max(0, this.playerPlayIdx.get(player.norm) - 2)
-              : 0;
-
-            playerStarts.set(player.norm, startIdx);
-          }
-
-          // Optimization: only start the outer play loop at the earliest start index
-          // needed by any player in this game.
-          const minStart = playerStarts.size
-            ? Math.min(...playerStarts.values())
-            : allPlays.length;
-
-          for (let i=minStart;i<allPlays.length;i++) {
-            const play=allPlays[i];
-            if (!play?.about?.isComplete) continue;
-
-            for (const player of gp) {
-              const pStart = playerStarts.get(player.norm) ?? 0;
-
-              // Existing players skip plays before their own cursor.
-              // Newly added players have pStart === 0, so they process full history.
-              if (i < pStart) continue;
-
-              for (const evt of this._processPlay(play,gameId,label,player)) {
-                if (this._addEvent(evt)) newEvents.push(evt);
-              }
-            }
-          }
-
-          // Only after processing do we advance each player's cursor to the end.
-          for (const player of gp) {
-            this.playerPlayIdx.set(player.norm, allPlays.length);
-          }
-        const cur=pbp?.currentPlay;
-        if (cur&&!cur.about?.isComplete) this._updateLive(cur,gp,label,gameId);
-
-        // ── Fetch boxscore for all games (Live and Final) to get official stats ──────────
-        try {
-          const box=await mlbFetch(`/api/v1/game/${gameId}/boxscore`);
-          const allPlayers={
-            ...box?.teams?.away?.players??{},
-            ...box?.teams?.home?.players??{},
-          };
-          for (const player of gp) {
-            const map=this.playerGameMap.get(player.norm);
-            if (!map) continue;
-            const key=`ID${map.apiId}`;
-            
-            if (player.isPitcher) {
-              const ps=allPlayers[key]?.stats?.pitching;
-              if (ps) {
-                this.pitcherBoxStats.set(player.norm, {
-                  er: ps.earnedRuns??0,
-                  outs: parseIPToOuts(ps.inningsPitched),
-                  k: ps.strikeOuts??0,
-                  bb: ps.baseOnBalls??0,
-                  ha: ps.hits??0,
-                  hra: ps.homeRuns??0,
-                  w: ps.wins??0,
-                  sv: ps.saves??0,
+          for (const side of ['away','home']) {
+            for (const p of Object.values(bs?.teams?.[side]?.players??{})) {
+              if (p?.person?.fullName) {
+                apiPlayers.push({
+                  id:Number(p.person.id),
+                  name:p.person.fullName,
+                  norm:normalize(p.person.fullName),
                 });
-                
-                // Add final Win/Save events if not yet recorded
-                if (isFinal && !this.finalDecisionGames.has(gameId)) {
-                  const ts=new Date().toISOString();
-                  if (ps.wins>0) {
-                    const evId=`${gameId}:W:${map.apiId}`;
-                    this._addEvent({
-                      id:evId,ts,playerName:player.name,role:'pitcher',
-                      type:'W',label:'Win',desc:`${player.name} earns the Win.`,
-                      inning:'Final',gameLabel:label,vs:'',
-                      isHit:false,countsAsAb:false,rbi:0,runs:0,
-                      outsRecorded:0,runsAllowed:0,
-                    });
-                  }
-                  if (ps.saves>0) {
-                    const evId=`${gameId}:SV:${map.apiId}`;
-                    this._addEvent({
-                      id:evId,ts,playerName:player.name,role:'pitcher',
-                      type:'SV',label:'Save',desc:`${player.name} records the Save.`,
-                      inning:'Final',gameLabel:label,vs:'',
-                      isHit:false,countsAsAb:false,rbi:0,runs:0,
-                      outsRecorded:0,runsAllowed:0,
-                    });
-                  }
-                }
               }
             }
           }
-          if (isFinal) {
-            this.finalDecisionGames.add(gameId);
+
+          this.gameRosters.set(game.gamePk,apiPlayers);
+        }
+
+        for (const p of needsCheck) {
+
+          if (!this.playerCheckedGames.has(p.norm)) {
+            this.playerCheckedGames.set(p.norm,new Set());
           }
-        } catch(e) {
-          console.warn(`[Boxscore] Fetch/process failed for game ${gameId}:`, e.message);
-        }
 
-        // Linescore for onDeck/inHole + batting order
-        if (isLive) {
-          try {
-            const ls=await mlbFetch(`/api/v1/game/${gameId}/linescore`,5_000);
-            const onDeckName=ls?.offense?.onDeck?.fullName??null;
-            const inHoleName=ls?.offense?.inHole?.fullName??null;
-            const battingOrder=ls?.offense?.battingOrder??[]; // Array of player IDs in order
-            
-            for (const player of gp) {
-              if (this.liveStatus[player.name]?.type==='batting') continue;
-              
-              // Check batting order position
-              const map=this.playerGameMap.get(player.norm);
-              if(map && battingOrder.length){
-                const orderPos=battingOrder.indexOf(map.apiId)+1;
-                if(orderPos>0){
-                  this.liveStatus[player.name]={
-                    ...(this.liveStatus[player.name]??{}),
-                    battingOrderPos:orderPos,
-                  };
-                }
+          this.playerCheckedGames.get(p.norm).add(game.gamePk);
+
+          if (this.playerGameMap.has(p.norm)) continue;
+
+          // ─────────────────────────────────────────────
+          // FIXED: Properly search all team slots
+          // ─────────────────────────────────────────────
+          let slotEntry = null;
+
+          for (const teamSlots of Object.values(slots)) {
+            for (const slot of Object.values(teamSlots)) {
+              if (slot && normalize(slot.name) === p.norm) {
+                slotEntry = slot;
+                break;
               }
-              
-              // On-base detection: check all three bases
-              const offenseRunners=[ls?.offense?.first,ls?.offense?.second,ls?.offense?.third].filter(Boolean);
-              const isOnBase=offenseRunners.some(r=>normalize(r?.fullName??'')===player.norm);
-
-              if (onDeckName&&normalize(onDeckName)===player.norm)
-                this.liveStatus[player.name]={...(this.liveStatus[player.name]??{}),type:'onDeck',inning:'',count:'',vs:'',gameLabel:label,gamePk:gameId};
-              else if (inHoleName&&normalize(inHoleName)===player.norm)
-                this.liveStatus[player.name]={...(this.liveStatus[player.name]??{}),type:'inHole',inning:'',count:'',vs:'',gameLabel:label,gamePk:gameId};
-              else if (isOnBase&&this.liveStatus[player.name]?.type!=='batting')
-                this.liveStatus[player.name]={...(this.liveStatus[player.name]??{}),type:'onBase',inning:'',count:'',vs:'',gameLabel:label,gamePk:gameId};
             }
-          } catch(_) {}
-          await sleep(60);
+            if (slotEntry) break;
+          }
+
+          const mlbId = slotEntry?.mlbId
+            ? Number(slotEntry.mlbId)
+            : null;
+
+          const match = mlbId
+            ? (apiPlayers.find(a => a.id === mlbId) ?? null)
+            : matchPlayer(p.norm, apiPlayers);
+
+          if (match) {
+            this.playerGameMap.set(p.norm,{
+              gameId:game.gamePk,
+              apiId:Number(match.id),
+              apiName:match.name
+            });
+
+            console.log(
+              `[Map] "${p.name}" (id=${match.id}) → game ${game.gamePk}`
+            );
+          }
         }
-      } catch(e) { console.warn(`[Poll] Game ${gameId}:`,e.message); }
+
+      } catch(e) {
+        console.warn(`[Discovery] game ${game.gamePk}:`,e.message);
+      }
+
       await sleep(60);
     }
 
-    this.lastPollMs=Date.now()-t0; this.lastError=null;
-    const mapped=players.filter(p=>this.playerGameMap.has(p.norm)).length;
-    const liveCount = [...active.values()].filter(g => g.isLive).length;
-    const finalCount = [...active.values()].filter(g => g.isFinal).length;
-    console.log(`[Poll] ${this.lastPollMs}ms | ${active.size} game(s) active/complete | live=${liveCount} final=${finalCount} | ${mapped}/${players.length} mapped | ${newEvents.length} new`);
-    return {newEvents};
+    for (const p of unmapped) {
+      if (!this.playerGameMap.has(p.norm)) {
+        console.warn(`[Unresolved] "${p.name}" — not in today's games`);
+
+        if (!this.playerCheckedGames.has(p.norm)) {
+          this.playerCheckedGames.set(p.norm, new Set());
+        }
+
+        for (const g of games) {
+          this.playerCheckedGames.get(p.norm).add(g.gamePk);
+        }
+      }
+    }
   }
+
+  // Active / completed games for the current tracker day
+  const active=new Map();
+
+  for (const p of players) {
+
+    const map=this.playerGameMap.get(p.norm);
+    if (!map) continue;
+
+    // ─────────────────────────────────────────────
+    // FIXED: Validate stale mappings
+    // ─────────────────────────────────────────────
+    const roster = this.gameRosters.get(map.gameId);
+
+    if (
+      roster &&
+      !roster.some(r => r.id === map.apiId)
+    ) {
+      console.warn(`[Remap] Clearing stale mapping for ${p.name}`);
+
+      this.playerGameMap.delete(p.norm);
+      this.playerPlayIdx.delete(p.norm);
+      this.playerCheckedGames.delete(p.norm);
+
+      continue;
+    }
+
+    const g=games.find(g=>g.gamePk===map.gameId);
+    if (!g) continue;
+
+    const st=g.status?.abstractGameState;
+
+    if (st==='Preview') continue;
+
+    if (!active.has(map.gameId)) {
+      active.set(map.gameId,{
+        label:`${g.teams?.away?.team?.name} @ ${g.teams?.home?.team?.name}`,
+        status:st,
+        isLive:st==='Live',
+        isFinal:st==='Final',
+        players:[],
+      });
+    }
+
+    this.gameScores[map.gameId]={
+      away:g.teams?.away?.score??0,
+      awayAbbr:g.teams?.away?.team?.abbreviation??'',
+      home:g.teams?.home?.score??0,
+      homeAbbr:g.teams?.home?.team?.abbreviation??'',
+      status:st,
+    };
+
+    active.get(map.gameId).players.push(p);
+  }
+
+  // Play-by-play + linescore
+  for (const [gameId,{label,isLive,isFinal,status,players:gp}] of active) {
+
+    if (isLive) {
+      gp.forEach(p=>this.activeGamePlayers.add(p.norm));
+    }
+
+    try {
+
+      const pbp=await mlbFetch(`/api/v1/game/${gameId}/playByPlay`);
+      const allPlays=pbp?.allPlays??[];
+
+      const playerStarts = new Map();
+
+      for (const player of gp) {
+
+        const hasIdx = this.playerPlayIdx.has(player.norm);
+
+        const startIdx = hasIdx
+          ? Math.max(0, this.playerPlayIdx.get(player.norm) - 2)
+          : 0;
+
+        playerStarts.set(player.norm, startIdx);
+      }
+
+      const minStart = playerStarts.size
+        ? Math.min(...playerStarts.values())
+        : allPlays.length;
+
+      for (let i=minStart;i<allPlays.length;i++) {
+
+        const play=allPlays[i];
+
+        if (!play?.about?.isComplete) continue;
+
+        for (const player of gp) {
+
+          const pStart = playerStarts.get(player.norm) ?? 0;
+
+          if (i < pStart) continue;
+
+          for (const evt of this._processPlay(play,gameId,label,player)) {
+            if (this._addEvent(evt)) {
+              newEvents.push(evt);
+            }
+          }
+        }
+      }
+
+      for (const player of gp) {
+        this.playerPlayIdx.set(player.norm, allPlays.length);
+      }
+
+      const cur=pbp?.currentPlay;
+
+      if (cur&&!cur.about?.isComplete) {
+        this._updateLive(cur,gp,label,gameId);
+      }
+
+      // ── Fetch boxscore for all games (Live and Final)
+      try {
+
+        const box=await mlbFetch(`/api/v1/game/${gameId}/boxscore`);
+
+        const allPlayers={
+          ...box?.teams?.away?.players??{},
+          ...box?.teams?.home?.players??{},
+        };
+
+        for (const player of gp) {
+
+          const map=this.playerGameMap.get(player.norm);
+          if (!map) continue;
+
+          const key=`ID${map.apiId}`;
+
+          if (player.isPitcher) {
+
+            const ps=allPlayers[key]?.stats?.pitching;
+
+            if (ps) {
+
+              this.pitcherBoxStats.set(player.norm, {
+                er: ps.earnedRuns??0,
+                outs: parseIPToOuts(ps.inningsPitched),
+                k: ps.strikeOuts??0,
+                bb: ps.baseOnBalls??0,
+                ha: ps.hits??0,
+                hra: ps.homeRuns??0,
+                w: ps.wins??0,
+                sv: ps.saves??0,
+              });
+
+              if (isFinal && !this.finalDecisionGames.has(gameId)) {
+
+                const ts=new Date().toISOString();
+
+                if (ps.wins>0) {
+
+                  const evId=`${gameId}:W:${map.apiId}`;
+
+                  this._addEvent({
+                    id:evId,
+                    ts,
+                    playerName:player.name,
+                    role:'pitcher',
+                    type:'W',
+                    label:'Win',
+                    desc:`${player.name} earns the Win.`,
+                    inning:'Final',
+                    gameLabel:label,
+                    vs:'',
+                    isHit:false,
+                    countsAsAb:false,
+                    rbi:0,
+                    runs:0,
+                    outsRecorded:0,
+                    runsAllowed:0,
+                  });
+                }
+
+                if (ps.saves>0) {
+
+                  const evId=`${gameId}:SV:${map.apiId}`;
+
+                  this._addEvent({
+                    id:evId,
+                    ts,
+                    playerName:player.name,
+                    role:'pitcher',
+                    type:'SV',
+                    label:'Save',
+                    desc:`${player.name} records the Save.`,
+                    inning:'Final',
+                    gameLabel:label,
+                    vs:'',
+                    isHit:false,
+                    countsAsAb:false,
+                    rbi:0,
+                    runs:0,
+                    outsRecorded:0,
+                    runsAllowed:0,
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        if (isFinal) {
+          this.finalDecisionGames.add(gameId);
+        }
+
+      } catch(e) {
+        console.warn(`[Boxscore] Fetch/process failed for game ${gameId}:`, e.message);
+      }
+
+      if (isLive) {
+
+        try {
+
+          const ls=await mlbFetch(`/api/v1/game/${gameId}/linescore`,5_000);
+
+          const onDeckName=ls?.offense?.onDeck?.fullName??null;
+          const inHoleName=ls?.offense?.inHole?.fullName??null;
+          const battingOrder=ls?.offense?.battingOrder??[];
+
+          for (const player of gp) {
+
+            if (this.liveStatus[player.name]?.type==='batting') continue;
+
+            const map=this.playerGameMap.get(player.norm);
+
+            if(map && battingOrder.length){
+
+              const orderPos=battingOrder.indexOf(map.apiId)+1;
+
+              if(orderPos>0){
+                this.liveStatus[player.name]={
+                  ...(this.liveStatus[player.name]??{}),
+                  battingOrderPos:orderPos,
+                };
+              }
+            }
+
+            const offenseRunners=[
+              ls?.offense?.first,
+              ls?.offense?.second,
+              ls?.offense?.third
+            ].filter(Boolean);
+
+            const isOnBase=offenseRunners.some(
+              r=>normalize(r?.fullName??'')===player.norm
+            );
+
+            if (onDeckName&&normalize(onDeckName)===player.norm)
+              this.liveStatus[player.name]={
+                ...(this.liveStatus[player.name]??{}),
+                type:'onDeck',
+                inning:'',
+                count:'',
+                vs:'',
+                gameLabel:label,
+                gamePk:gameId
+              };
+
+            else if (inHoleName&&normalize(inHoleName)===player.norm)
+              this.liveStatus[player.name]={
+                ...(this.liveStatus[player.name]??{}),
+                type:'inHole',
+                inning:'',
+                count:'',
+                vs:'',
+                gameLabel:label,
+                gamePk:gameId
+              };
+
+            else if (isOnBase&&this.liveStatus[player.name]?.type!=='batting')
+              this.liveStatus[player.name]={
+                ...(this.liveStatus[player.name]??{}),
+                type:'onBase',
+                inning:'',
+                count:'',
+                vs:'',
+                gameLabel:label,
+                gamePk:gameId
+              };
+          }
+
+        } catch(_) {}
+
+        await sleep(60);
+      }
+
+    } catch(e) {
+      console.warn(`[Poll] Game ${gameId}:`,e.message);
+    }
+
+    await sleep(60);
+  }
+
+  this.lastPollMs=Date.now()-t0;
+  this.lastError=null;
+
+  const mapped=players.filter(
+    p=>this.playerGameMap.has(p.norm)
+  ).length;
+
+  const liveCount = [...active.values()]
+    .filter(g => g.isLive).length;
+
+  const finalCount = [...active.values()]
+    .filter(g => g.isFinal).length;
+
+  console.log(
+    `[Poll] ${this.lastPollMs}ms | ${active.size} game(s) active/complete | live=${liveCount} final=${finalCount} | ${mapped}/${players.length} mapped | ${newEvents.length} new`
+  );
+
+  return {newEvents};
+}
 
   _processPlay(play, gameId, label, player) {
     const map=this.playerGameMap.get(player.norm); if(!map) return [];
