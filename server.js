@@ -7,7 +7,8 @@ const path     = require('path');
 const { exec } = require('child_process');
 
 const PORT = process.env.PORT || 3847;
-const POLL_MS    = 10_000;
+const POLL_MS    = 15_000;
+const TEAM_POLL_MS = 45_000;
 const DATA_DIR   = path.join(__dirname, 'data');
 const SLOTS_FILE = path.join(DATA_DIR, 'slots.json');
 const PUB_DIR    = path.join(__dirname, 'public');
