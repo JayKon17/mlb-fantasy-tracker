@@ -413,12 +413,12 @@ body {
 .sg-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   background: var(--surf2);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 5px 9px;
-  min-width: 118px;
+  padding: 2px 10px;
+  min-width: 96px;
   margin-right: 5px;
   flex-shrink: 0;
   text-decoration: none;
@@ -439,10 +439,10 @@ body {
 }
 .sg-card.sg-live:hover { border-color: var(--green); }
 .sg-card.sg-final {
-  opacity: 0.65;
+  opacity: 0.55;
   border-color: var(--border);
 }
-.sg-card.sg-final:hover { opacity: 0.85; }
+.sg-card.sg-final:hover { opacity: 0.8; }
 
 .sg-teams {
   display: flex;
@@ -457,16 +457,16 @@ body {
   gap: 6px;
 }
 .sg-logo-wrap {
-  width: 28px;
-  height: 22px;
+  width: 36px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   flex-shrink: 0;
 }
 .sg-team-logo {
-  width: 28px;
-  height: 22px;
+  width: 36px;
+  height: 24px;
   object-fit: contain;
   display: block;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
@@ -476,7 +476,7 @@ body {
 .sg-card.sg-final .sg-team-row.sg-winner .sg-team-logo { opacity: 1; }
 .sg-abbr-fb {
   font-family: var(--fn-display);
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 0.5px;
   color: var(--text);
 }
@@ -484,15 +484,17 @@ body {
   font-family: var(--fn-mono);
   font-size: 15px;
   font-weight: 700;
-  color: var(--dim);
-  min-width: 18px;
+  color: var(--bright);
+  min-width: 16px;
   text-align: right;
 }
+.sg-card.sg-final .sg-score { color: var(--dim); }
+.sg-card.sg-final .sg-team-row.sg-winner .sg-score { color: var(--bright); }
 .sg-team-row.sg-winner .sg-abbr-fb { color: var(--bright); }
 .sg-team-row.sg-winner .sg-score { color: var(--bright); }
 
 /* Live game status */
-.sg-status-live { display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+.sg-status-live { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
 .sg-live-inning {
   font-family: var(--fn-mono);
   font-size: 11px;
@@ -513,28 +515,25 @@ body {
 }
 .sg-live-row2 {
   display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.sg-live-details {
-  display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
 }
-.sg-count-display {
-  font-family: var(--fn-mono);
-  font-size: 11px;
-  color: var(--bright);
-  font-weight: 600;
+.sg-out-dots { display: flex; gap: 3px; align-items: center; }
+.sg-out-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--dim2);
+  background: transparent;
+  transition: background .15s, border-color .15s;
 }
-.sg-outs-display {
-  font-family: var(--fn-mono);
-  font-size: 9px;
-  color: var(--dim);
+.sg-out-dot.sg-out-on { background: var(--red); border-color: var(--red); }
+
+.sg-diamond {
+  display: block;
+  margin: 0 auto;
 }
-.sg-outs-label { font-size: 9px; }
-.sg-diamond { display: block; flex-shrink: 0; }
 
 /* Final/preview status */
 .sg-status-final {
@@ -1680,7 +1679,7 @@ body {
 
   /* Scores bar */
   #mlb-scores-inner { padding: 4px 6px; }
-  .sg-card { min-width: 100px; padding: 4px 7px; }
+  .sg-card { min-width: 86px; padding: 4px 6px; }
 
   /* ── Persistent accumulator bar ── */
   #mob-acc {
@@ -1702,9 +1701,9 @@ body {
     gap: 0;
   }
   #mob-acc .ts-grid::-webkit-scrollbar { display: none; }
-  #mob-acc .ts-pair { padding: 3px 10px; }
-  #mob-acc .ts-val { font-size: 15px; }
-  #mob-acc .ts-label { font-size: 8px; }
+  #mob-acc .ts-pair { padding: 2px 6px; }
+  #mob-acc .ts-val { font-size: 12px; }
+  #mob-acc .ts-label { font-size: 10px; }
 
   /* ── Mobile tab panels ── */
   #mob-panels {

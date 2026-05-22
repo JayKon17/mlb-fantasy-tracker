@@ -1331,15 +1331,13 @@ function renderScoreboard(games){
       const half=g.inningHalf&&g.inningHalf.toLowerCase().startsWith('top')?'▲':'▼';
       const diamond=buildScoreDiamond(g.runners?.first,g.runners?.second,g.runners?.third);
       const outsStr=`${g.outs} <span class="sg-outs-label">out${g.outs!==1?'s':''}</span>`;
+      const outDots=`<div class="sg-out-dots">${[0,1,2].map(i=>`<span class="sg-out-dot${i<g.outs?' sg-out-on':''}"></span>`).join('')}</div>`;
       statusHtml=`
         <div class="sg-status-live">
           <div class="sg-live-inning"><span class="sg-live-pip"></span>${half}${g.inning}</div>
           <div class="sg-live-row2">
             ${diamond}
-            <div class="sg-live-details">
-              <span class="sg-count-display">${g.balls}-${g.strikes}</span>
-              <span class="sg-outs-display">${outsStr}</span>
-            </div>
+            ${outDots}
           </div>
         </div>`;
     } else if(isFinal){
