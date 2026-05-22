@@ -99,12 +99,20 @@
 <div id="watch-overlay">
   <div id="watch-modal">
     <div id="wm-header">
-      <div id="wm-game-ctx">
-        <span id="wm-game-away" class="wm-team-ctx">—</span>
-        <span class="wm-ctx-dot">·</span>
-        <span id="wm-inning-badge">—</span>
-        <span class="wm-ctx-dot">·</span>
-        <span id="wm-game-home" class="wm-team-ctx">—</span>
+      <div id="wm-score-bar">
+        <div class="wm-sb-team wm-sb-away">
+          <img class="wm-sb-logo" id="wm-away-logo" alt="" onerror="this.style.display='none'">
+          <span class="wm-sb-abbr" id="wm-sb-away-abbr">—</span>
+          <span class="wm-sb-score" id="wm-sb-away-score"></span>
+        </div>
+        <div class="wm-sb-mid">
+          <span id="wm-inning-badge">—</span>
+        </div>
+        <div class="wm-sb-team wm-sb-home">
+          <span class="wm-sb-score" id="wm-sb-home-score"></span>
+          <span class="wm-sb-abbr" id="wm-sb-home-abbr">—</span>
+          <img class="wm-sb-logo" id="wm-home-logo" alt="" onerror="this.style.display='none'">
+        </div>
       </div>
       <button id="wm-close" onclick="closeWatch()">✕</button>
     </div>
@@ -112,14 +120,30 @@
     <div id="wm-matchup">
       <div class="wm-side wm-batter-side">
         <div class="wm-role-tag bat-tag">🏏 AT BAT</div>
-        <div class="wm-player-name" id="wm-batter-name">—</div>
-        <div class="wm-hand-badge" id="wm-bat-hand">—</div>
+        <div class="wm-player-row">
+          <div class="wm-player-photo-wrap">
+            <span class="wm-photo-initial" id="wm-batter-initial">?</span>
+            <img id="wm-batter-img" alt="" onerror="this.style.opacity='0'">
+          </div>
+          <div class="wm-player-info">
+            <div class="wm-player-name" id="wm-batter-name">—</div>
+            <div class="wm-hand-badge" id="wm-bat-hand">—</div>
+          </div>
+        </div>
       </div>
       <div class="wm-vs">VS</div>
       <div class="wm-side wm-pitcher-side">
         <div class="wm-role-tag pit-tag">⚾ PITCHING</div>
-        <div class="wm-player-name" id="wm-pitcher-name">—</div>
-        <div class="wm-hand-badge" id="wm-pit-hand">—</div>
+        <div class="wm-player-row wm-player-row-rev">
+          <div class="wm-player-photo-wrap">
+            <span class="wm-photo-initial" id="wm-pitcher-initial">?</span>
+            <img id="wm-pitcher-img" alt="" onerror="this.style.opacity='0'">
+          </div>
+          <div class="wm-player-info wm-player-info-right">
+            <div class="wm-player-name" id="wm-pitcher-name">—</div>
+            <div class="wm-hand-badge" id="wm-pit-hand">—</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -146,7 +170,9 @@
         <svg id="zone-svg" width="200" height="240" viewBox="0 0 200 240"></svg>
         <div id="zone-pitch-legend"></div>
       </div>
-      <div id="pitch-log"></div>
+      <div id="pitch-log">
+        <div id="wm-last-pitch"></div>
+      </div>
     </div>
     <div id="wm-result"></div>
   </div>
@@ -202,6 +228,7 @@ let state={slots:{},events:[],stats:{},liveStatus:{},activeGamePlayers:[],player
 let lastPoll=null;
 let dragFrom=null;
 let watchGPK=null,watchTimer=null;
+let scoreboardData=[];
 let acIdx=-1,acResults=[],acTimer=null;
 
 // ── Player headshot ──────────────────────────────────────────────────────────
@@ -308,15 +335,15 @@ function updateVolLabel(){
   document.getElementById('vol-label').textContent=volume===0?'🔇':`🔔 ${pct}%`;
 }
 
-function ensureAudio(){
+async function ensureAudio(){
   if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-  if(audioCtx.state==='suspended') audioCtx.resume();
+  if(audioCtx.state==='suspended') await audioCtx.resume();
 }
 
-function playSound(name){
+async function playSound(name){
   if(volume===0) return;
   try{
-    ensureAudio();
+    await ensureAudio();
     const ctx=audioCtx, now=ctx.currentTime, v=volume;
     const tone=(freq,startDelay,dur,vol=1)=>{
       const osc=ctx.createOscillator(), g=ctx.createGain();
@@ -1082,27 +1109,78 @@ async function fetchAtBat(){
 }
 
 function renderAtBat(data){
-  // Game context header
-  const away=document.getElementById('wm-game-away');
-  const home=document.getElementById('wm-game-home');
-  const inn =document.getElementById('wm-inning-badge');
-  if(away) away.textContent='—';
-  if(home) home.textContent='—';
-  if(inn)  inn.textContent=`${data.inning} · ${data.outs} Out${data.outs!==1?'s':''}`;
+  // ── Score bar from state.gameScores or scoreboardData ──
+  const gs  = state.gameScores?.[watchGPK];
+  const sbG = scoreboardData.find(g=>String(g.gamePk)===String(watchGPK));
 
-  // Matchup
-  document.getElementById('wm-batter-name').textContent=data.batter;
+  const awayAbbrEl = document.getElementById('wm-sb-away-abbr');
+  const homeAbbrEl = document.getElementById('wm-sb-home-abbr');
+  const awayScEl   = document.getElementById('wm-sb-away-score');
+  const homeScEl   = document.getElementById('wm-sb-home-score');
+  const awayLogoEl = document.getElementById('wm-away-logo');
+  const homeLogoEl = document.getElementById('wm-home-logo');
+
+  if(gs){
+    if(awayAbbrEl) awayAbbrEl.textContent = gs.awayAbbr || '—';
+    if(homeAbbrEl) homeAbbrEl.textContent = gs.homeAbbr || '—';
+    if(awayScEl)   awayScEl.textContent   = gs.status!=='Preview'?gs.away:'';
+    if(homeScEl)   homeScEl.textContent   = gs.status!=='Preview'?gs.home:'';
+  }
+  if(sbG){
+    if(awayLogoEl){ awayLogoEl.src=teamLogoUrl(sbG.awayId)||''; awayLogoEl.style.display=sbG.awayId?'':'none'; }
+    if(homeLogoEl){ homeLogoEl.src=teamLogoUrl(sbG.homeId)||''; homeLogoEl.style.display=sbG.homeId?'':'none'; }
+  }
+
+  // ── Inning badge ──
+  const inn=document.getElementById('wm-inning-badge');
+  if(inn){
+    const half=data.inning?.toLowerCase().includes('bot')?'▼':'▲';
+    const innNum=(data.inning||'').replace(/\D/g,'');
+    inn.textContent=`${half}${innNum} · ${data.outs} Out${data.outs!==1?'s':''}`;
+  }
+
+  // ── Matchup with headshots ──
+  const batterName=data.batter;
+  const pitcherName=data.pitcher;
+
+  // Look up MLB IDs from current state.slots
+  let batterMlbId=null, pitcherMlbId=null;
+  const normBatter=normalize(batterName), normPitcher=normalize(pitcherName);
+  for(const [,p] of Object.entries(state.slots||{})){
+    if(p&&normalize(p.name)===normBatter) batterMlbId=p.mlbId;
+    if(p&&normalize(p.name)===normPitcher) pitcherMlbId=p.mlbId;
+  }
+
+  document.getElementById('wm-batter-name').textContent=batterName;
   document.getElementById('wm-bat-hand').textContent=data.batSide==='L'?'Left Handed':data.batSide==='S'?'Switch Hitter':'Right Handed';
-  document.getElementById('wm-pitcher-name').textContent=data.pitcher;
+  document.getElementById('wm-pitcher-name').textContent=pitcherName;
   document.getElementById('wm-pit-hand').textContent=data.pitSide==='L'?'Left Handed':'Right Handed';
 
-  // Count dots
+  const batInitEl=document.getElementById('wm-batter-initial');
+  const batImgEl=document.getElementById('wm-batter-img');
+  const pitInitEl=document.getElementById('wm-pitcher-initial');
+  const pitImgEl=document.getElementById('wm-pitcher-img');
+
+  if(batInitEl) batInitEl.textContent=lastName(batterName).charAt(0).toUpperCase()||'?';
+  if(pitInitEl) pitInitEl.textContent=lastName(pitcherName).charAt(0).toUpperCase()||'?';
+  if(batImgEl){
+    const url=playerHeadshot(batterMlbId);
+    if(url){ batImgEl.src=url; batImgEl.style.opacity='1'; batImgEl.onerror=()=>{ batImgEl.style.opacity='0'; }; }
+    else batImgEl.style.opacity='0';
+  }
+  if(pitImgEl){
+    const url=playerHeadshot(pitcherMlbId);
+    if(url){ pitImgEl.src=url; pitImgEl.style.opacity='1'; pitImgEl.onerror=()=>{ pitImgEl.style.opacity='0'; }; }
+    else pitImgEl.style.opacity='0';
+  }
+
+  // ── Count dots ──
   const{balls,strikes}=data.count;
   document.getElementById('wm-ball-dots').innerHTML=[0,1,2].map(i=>`<div class="wm-dot${i<balls?' wm-ball':''}"></div>`).join('');
   document.getElementById('wm-strike-dots').innerHTML=[0,1].map(i=>`<div class="wm-dot${i<strikes?' wm-strike':''}"></div>`).join('');
   document.getElementById('wm-out-dots').innerHTML=[0,1].map(i=>`<div class="wm-dot${i<data.outs?' wm-out':''}"></div>`).join('');
 
-  // Bases
+  // ── Bases ──
   const{first,second,third}=data.runners;
   document.getElementById('wm-bases-wrap').innerHTML=renderBasesSVG(first,second,third);
 
@@ -1154,11 +1232,27 @@ function pitchTypeName(code){ return PITCH_TYPE_NAMES[code]||code||'—'; }
 
 function renderPitchLog(pitches){
   const el=document.getElementById('pitch-log');
-  if(!pitches.length){el.innerHTML='<div class="pl-waiting">⏳ Waiting for pitches…</div>';return;}
+  if(!pitches.length){
+    el.innerHTML='<div id="wm-last-pitch"></div><div class="pl-waiting">⏳ Waiting for pitches…</div>';
+    return;
+  }
   const last=pitches[pitches.length-1];
   const countStr=last?`${last.count?.balls??0}-${last.count?.strikes??0}`:'';
-  el.innerHTML=`
-    <div class="pl-header">
+  const col=pitchColor(last.type);
+  const resultCls=last.inPlay?'lp-in-play':last.isStrike?'lp-strike':last.isBall?'lp-ball':'';
+
+  // Last pitch hero
+  const heroHtml=`<div id="wm-last-pitch">
+    <div class="wm-lp-hero" style="border-color:${col}44">
+      <div class="wm-lp-num">#${last.num}</div>
+      <div class="wm-lp-type-name" style="color:${col}">${esc(pitchTypeName(last.type))}</div>
+      ${last.speed!=null?`<div class="wm-lp-velo">${last.speed.toFixed(1)}<span class="wm-lp-unit">mph</span></div>`:''}
+      <div class="wm-lp-result ${resultCls}">${esc((last.desc||'').slice(0,42))}</div>
+    </div>
+  </div>`;
+
+  el.innerHTML=heroHtml+`
+    <div class="pl-header" style="margin-top:10px">
       <span class="pl-title">PITCH SEQUENCE</span>
       <span class="pl-count-badge">Count: ${esc(countStr)}</span>
     </div>
@@ -1167,13 +1261,13 @@ function renderPitchLog(pitches){
       <thead><tr><th>#</th><th>PITCH</th><th>VELO</th><th>RESULT</th></tr></thead>
       <tbody>
       ${pitches.map(p=>{
-        const col=pitchColor(p.type);
-        const resultCls=p.inPlay?'pl-in-play':p.isStrike?'pl-strike':p.isBall?'pl-ball':'';
+        const pcol=pitchColor(p.type);
+        const pResultCls=p.inPlay?'pl-in-play':p.isStrike?'pl-strike':p.isBall?'pl-ball':'';
         return`<tr class="${pitches[pitches.length-1]===p?'pl-last':''}">
           <td class="pl-num">${p.num}</td>
-          <td><span class="pl-type-badge" style="background:${col}22;color:${col};border-color:${col}55">${esc(pitchTypeName(p.type))}</span></td>
+          <td><span class="pl-type-badge" style="background:${pcol}22;color:${pcol};border-color:${pcol}55">${esc(pitchTypeName(p.type))}</span></td>
           <td class="pl-velo">${p.speed!=null?p.speed.toFixed(1)+'<span class="pl-unit">mph</span>':'—'}</td>
-          <td class="pl-result ${resultCls}">${esc((p.desc||'').slice(0,32))}</td></tr>`;
+          <td class="pl-result ${pResultCls}">${esc((p.desc||'').slice(0,32))}</td></tr>`;
       }).join('')}
       </tbody>
     </table>
@@ -1212,7 +1306,7 @@ async function fetchScoreboard(){
   try{
     const res=await fetch('/api/scoreboard');
     const games=await res.json();
-    if(Array.isArray(games)) renderScoreboard(games);
+    if(Array.isArray(games)){ scoreboardData=games; renderScoreboard(games); }
   }catch(_){}
 }
 

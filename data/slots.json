@@ -116,8 +116,8 @@
       "name": "Roki Sasaki",
       "norm": "roki sasaki",
       "position": "P",
-      "mlbId": 808963,
-      "teamAbbr": ""
+      "teamAbbr": "",
+      "mlbId": 808963
     },
     "P4": {
       "name": "Andrew Abbott",
@@ -144,22 +144,21 @@
       "name": "Zebby Matthews",
       "norm": "zebby matthews",
       "position": "P",
-      "teamAbbr": "",
       "mlbId": 805673
     },
     "P8": {
       "name": "Tony Santillan",
       "norm": "tony santillan",
       "position": "P",
-      "teamAbbr": "",
-      "mlbId": 663574
+      "mlbId": 663574,
+      "teamAbbr": ""
     },
     "P9": {
       "name": "Nick Lodolo",
       "norm": "nick lodolo",
       "position": "P",
-      "teamAbbr": "",
-      "mlbId": 666157
+      "mlbId": 666157,
+      "teamAbbr": ""
     },
     "BN1": {
       "name": "Francisco Lindor",
@@ -213,36 +212,199 @@
     "teamName": "Johnny"
   },
   "2": {
-    "C1": null,
-    "C2": null,
-    "1B": null,
-    "2B": null,
-    "3B": null,
-    "SS": null,
-    "MI": null,
-    "CI": null,
-    "OF1": null,
-    "OF2": null,
-    "OF3": null,
-    "OF4": null,
-    "OF5": null,
-    "UTIL": null,
-    "P1": null,
-    "P2": null,
-    "P3": null,
-    "P4": null,
-    "P5": null,
-    "P6": null,
-    "P7": null,
-    "P8": null,
-    "P9": null,
-    "BN1": null,
-    "BN2": null,
-    "BN3": null,
-    "BN4": null,
+    "C1": {
+      "name": "Adley Rutschman",
+      "norm": "adley rutschman",
+      "position": "C",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "C2": {
+      "name": "Logan O'Hoppe",
+      "norm": "logan o hoppe",
+      "position": "C",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "1B": {
+      "name": "Josh Naylor",
+      "norm": "josh naylor",
+      "position": "1B",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "2B": {
+      "name": "Brice Turang",
+      "norm": "brice turang",
+      "position": "2B",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "3B": {
+      "name": "Manny Machado",
+      "norm": "manny machado",
+      "position": "3B",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "SS": {
+      "name": "Trea Turner",
+      "norm": "trea turner",
+      "position": "SS",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "MI": {
+      "name": "Ezequiel Duran",
+      "norm": "ezequiel duran",
+      "position": "SS",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "CI": {
+      "name": "Kody Clemens",
+      "norm": "kody clemens",
+      "position": "1B",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "OF1": {
+      "name": "Randy Arozarena",
+      "norm": "randy arozarena",
+      "position": "OF",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "OF2": {
+      "name": "Cody Bellinger",
+      "norm": "cody bellinger",
+      "position": "OF",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "OF3": {
+      "name": "Byron Buxton",
+      "norm": "byron buxton",
+      "position": "OF",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "OF4": {
+      "name": "Sal Frelick",
+      "norm": "sal frelick",
+      "position": "OF",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "OF5": {
+      "name": "JJ Bleday",
+      "norm": "jj bleday",
+      "position": "OF",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "UTIL": {
+      "name": "Marcell Ozuna",
+      "norm": "marcell ozuna",
+      "position": "DH",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P1": {
+      "name": "Kenley Jansen",
+      "norm": "kenley jansen",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P2": {
+      "name": "Michael Soroka",
+      "norm": "michael soroka",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P3": {
+      "name": "Aaron Civale",
+      "norm": "aaron civale",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P4": {
+      "name": "Jacob Misiorowski",
+      "norm": "jacob misiorowski",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P5": {
+      "name": "Antonio Senzatela",
+      "norm": "antonio senzatelea",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P6": {
+      "name": "Cristopher Sanchez",
+      "norm": "cristopher sanchez",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P7": {
+      "name": "Framber Valdez",
+      "norm": "framber valdez",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P8": {
+      "name": "Michael King",
+      "norm": "michael king",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "P9": {
+      "name": "Tyler Glasnow",
+      "norm": "tyler glasnow",
+      "position": "P",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "BN1": {
+      "name": "Eugenio Suarez",
+      "norm": "eugenio suarez",
+      "position": "3B",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "BN2": {
+      "name": "Jacob Wilson",
+      "norm": "jacob wilson",
+      "position": "SS",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "BN3": {
+      "name": "Joey Wiemer",
+      "norm": "joey wiemer",
+      "position": "OF",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
+    "BN4": {
+      "name": "Kerry Carpenter",
+      "norm": "kerry carpenter",
+      "position": "OF",
+      "mlbId": null,
+      "teamAbbr": ""
+    },
     "BN5": null,
     "BN6": null,
-    "BN7": null
+    "BN7": null,
+    "teamName": "Brad's Lumber Yard"
   },
   "3": {
     "C1": null,
