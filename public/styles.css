@@ -238,32 +238,6 @@ body {
   cursor: pointer;
 }
 
-/* Status */
-#status-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  margin-left: auto;
-}
-#status-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--dim);
-  transition: background .3s;
-}
-#status-dot.live {
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green-glow);
-  animation: pulse-dot 2s infinite;
-}
-#status-dot.error { background: var(--red); }
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .4; }
-}
-#status-txt { font-size: 12px; color: var(--dim); font-family: var(--fn-mono); }
-
 /* Team Selector */
 #team-select-wrap {
   display: flex;
@@ -1642,10 +1616,6 @@ body {
   }
   #team-select { font-size: 9px; padding: 4px 18px 4px 6px; }
   #btn-rename-team { width: 18px; height: 18px; font-size: 9px; }
-
-  #status-wrap { margin-left: 0; flex-shrink: 0; gap: 4px; }
-  #status-dot  { width: 7px; height: 7px; }
-  #status-txt  { font-size: 10px; }
 
   /* Scores bar */
   #mlb-scores-inner { padding: 4px 6px; }

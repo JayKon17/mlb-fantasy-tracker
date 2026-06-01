@@ -42,11 +42,7 @@
         <div class="ts-grid" id="ts-grid-inner"></div>
       </div>
 
-      <div id="status-wrap">
-        <div id="status-dot"></div>
-        <span id="status-txt">Connecting…</span>
 
-      </div>
     </div>
 
     <div id="mlb-scores">
@@ -489,8 +485,8 @@ function connectSSE(){
     showToast(d);
     if(sseReady) playSound(soundForEvent(d.type,d.role));
   });
-  es.onopen=()=>setStatus('live','Live');
-  es.onerror=()=>{setStatus('error','Reconnecting…');es.close();setTimeout(connectSSE,3000);};
+  es.onopen=()=>{};
+  es.onerror=()=>{es.close();setTimeout(connectSSE,3000);};
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────
@@ -1069,10 +1065,6 @@ function findBestSlot(pos){
 }
 
 // ── Status ────────────────────────────────────────────────────────────────────
-function setStatus(type,text){
-  document.getElementById('status-dot').className=type;
-  document.getElementById('status-txt').textContent=text;
-}
 
 // ── Toasts ────────────────────────────────────────────────────────────────────
 function showToast(data){
