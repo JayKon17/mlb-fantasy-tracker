@@ -35,7 +35,7 @@
           <option value="4">Team 4</option>
           <option value="5">Team 5</option>
         </select>
-        <button id="btn-rename-team" onclick="promptRenameTeam()" title="Rename current team">✏️</button>
+        <button id="btn-rename-team" onclick="openSettingsModal()" title="Team settings">✏️</button>
       </div>
 
       <div id="today-stats-inline">
@@ -45,7 +45,7 @@
       <div id="status-wrap">
         <div id="status-dot"></div>
         <span id="status-txt">Connecting…</span>
-        <span id="poll-eta"></span>
+
       </div>
     </div>
 
@@ -95,6 +95,32 @@
 </nav>
 
 <div id="toast-root"></div>
+
+<!-- ── Settings Modal ──────────────────────────────────────────────── -->
+<div id="settings-overlay" onclick="if(event.target===this)closeSettingsModal()">
+  <div id="settings-modal">
+    <div id="settings-hdr">
+      <span id="settings-title">TEAM SETTINGS</span>
+      <button id="settings-close" onclick="closeSettingsModal()">✕</button>
+    </div>
+    <div id="settings-body">
+      <section class="sm-section">
+        <div class="sm-section-label">TEAM NAME</div>
+        <div class="sm-row">
+          <input id="sm-team-name" type="text" maxlength="25" placeholder="Enter team name…" autocomplete="off">
+          <button class="sm-btn-primary" onclick="saveTeamName()">Save</button>
+        </div>
+        <div class="sm-hint">Up to 25 characters</div>
+      </section>
+      <section class="sm-section sm-section-future">
+        <div class="sm-section-label">COMING SOON</div>
+        <div class="sm-future-item">⚙ Customize slot layout</div>
+        <div class="sm-future-item">📐 Scoring settings</div>
+        <div class="sm-future-item">🏒 Switch sport</div>
+      </section>
+    </div>
+  </div>
+</div>
 
 <div id="watch-overlay">
   <div id="watch-modal">
@@ -506,10 +532,7 @@ function updateSlotRow(row, bodyId, actsId, def, player, liveInfo, s, isPit, inG
     const isActive=focusPlayer===player?.name;
     if(player){
       const focusBtn=`<button class="btn-focus${isActive?' is-active':''}" onclick="toggleFocus('${player.name.replace(/'/g,"\\'")}')" title="Filter log to this player">ℹ</button>`;
-      const watchCls=isLive_?'btn-watch':'btn-watch btn-watch-dim';
-      const watchAttr=isLive_?` onclick="openWatch(${liveInfo.gamePk})"`:' disabled';
-      const watchBtn=`<button class="${watchCls}"${watchAttr}>📡 Watch</button>`;
-      acts.innerHTML=`<div class="sa-top">${focusBtn}<button class="btn-clear" onclick="clearSlot('${def.id}')">&#x2715;</button></div>${watchBtn}`;
+      acts.innerHTML=`<div class="sa-top">${focusBtn}<button class="btn-clear" onclick="clearSlot('${def.id}')">&#x2715;</button></div>`;
     } else {
       acts.innerHTML='';
     }
@@ -1045,16 +1068,11 @@ function findBestSlot(pos){
   return null;
 }
 
-// ── Status + poll countdown ───────────────────────────────────────────────────
+// ── Status ────────────────────────────────────────────────────────────────────
 function setStatus(type,text){
   document.getElementById('status-dot').className=type;
   document.getElementById('status-txt').textContent=text;
 }
-setInterval(()=>{
-  if(!lastPoll) return;
-  const next=Math.max(0,10-Math.round((Date.now()-lastPoll)/1000));
-  document.getElementById('poll-eta').textContent=`next ${next}s`;
-},1000);
 
 // ── Toasts ────────────────────────────────────────────────────────────────────
 function showToast(data){
@@ -1446,22 +1464,39 @@ function changeTeam(val){
   connectSSE();
 }
 
-async function promptRenameTeam(){
+async function openSettingsModal(){
   const curName = state.teamNames?.[String(currentTeamId)] || `Team ${currentTeamId}`;
-  const newName = prompt("Rename current team slot:", curName);
-  if(newName === null) return;
-  const trimmed = newName.trim();
-  if(trimmed.length > 25) {
-    alert("Team name cannot exceed 25 characters.");
+  const inp = document.getElementById('sm-team-name');
+  if(inp) inp.value = curName;
+  document.getElementById('settings-overlay').classList.add('open');
+  setTimeout(()=>inp?.focus(),80);
+}
+
+function closeSettingsModal(){
+  document.getElementById('settings-overlay').classList.remove('open');
+}
+
+async function saveTeamName(){
+  const inp = document.getElementById('sm-team-name');
+  const trimmed = (inp?.value||'').trim();
+  if(trimmed.length > 25){
+    inp.classList.add('sm-input-error');
+    setTimeout(()=>inp.classList.remove('sm-input-error'),1000);
     return;
   }
-  
   await fetch(`/api/team/rename?team=${currentTeamId}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: trimmed })
   });
+  closeSettingsModal();
 }
+
+// Allow Enter key to save from the name input
+document.getElementById('sm-team-name')?.addEventListener('keydown', e=>{
+  if(e.key==='Enter') saveTeamName();
+  if(e.key==='Escape') closeSettingsModal();
+});
 
 // ── Mobile tabs ───────────────────────────────────────────────────────────────
 let mobTab = localStorage.getItem('mlb_mob_tab') || 'players';
