@@ -527,8 +527,13 @@ function updateSlotRow(row, bodyId, actsId, def, player, liveInfo, s, isPit, inG
   if(acts){
     const isActive=focusPlayer===player?.name;
     if(player){
+      const gamePk=liveInfo?.gamePk??null;
       const focusBtn=`<button class="btn-focus${isActive?' is-active':''}" onclick="toggleFocus('${player.name.replace(/'/g,"\\'")}')" title="Filter log to this player">ℹ</button>`;
-      acts.innerHTML=`<div class="sa-top">${focusBtn}<button class="btn-clear" onclick="clearSlot('${def.id}')">&#x2715;</button></div>`;
+      const clearBtn=`<button class="btn-clear" onclick="clearSlot('${def.id}')">&#x2715;</button>`;
+      const watchBtn=gamePk
+        ?`<button class="btn-watch-sm" onclick="openWatch(${gamePk})" title="Watch live at-bat">📡</button>`
+        :`<button class="btn-watch-sm btn-watch-sm-dim" disabled title="No live game">📡</button>`;
+      acts.innerHTML=`<div class="sa-grid">${focusBtn}${clearBtn}${watchBtn}</div>`;
     } else {
       acts.innerHTML='';
     }
@@ -696,11 +701,20 @@ function slotBody(player, liveInfo, s, isPit){
       statusLine=`<div class="slot-inhole">⏳ In the Hole${orderBadge}</div>`;
   }
 
+  // Game score — inline right side of name row
+  let scoreInline='';
+  const gs=findGameScore(player, liveInfo);
+  if(gs && gs.status!=='Preview'){
+    const innStr=gs.inning?(gs.inningHalf==='Bottom'?`▼${gs.inning}`:`▲${gs.inning}`):(gs.status==='Final'?'F':'');
+    const scoreVal=`${esc(gs.awayAbbr)} ${gs.away} - ${gs.home} ${esc(gs.homeAbbr)}`;
+    scoreInline=`<span class="slot-score-inline">${scoreVal}${innStr?` <span class="ssl-inn">${innStr}</span>`:''}</span>`;
+  }
+
   const statLine=buildStatLine(s,isPit);
 
   return `${photoHtml}<div class="slot-info">
     <div class="slot-name-row">
-      <span class="slot-name">${esc(player.name)}</span>${teamTag}
+      <span class="slot-name">${esc(player.name)}</span>${teamTag}${scoreInline}
     </div>
     ${statLine}
     ${statusLine}
@@ -1386,6 +1400,21 @@ function renderScoreboard(games){
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function findGameScore(player, liveInfo){
+  // Prefer gamePk from live status (most accurate)
+  if(liveInfo?.gamePk){
+    const gs=state.gameScores?.[liveInfo.gamePk];
+    if(gs) return gs;
+  }
+  // Fall back: match by team abbreviation
+  if(player?.teamAbbr){
+    const abbr=player.teamAbbr.toUpperCase();
+    for(const gs of Object.values(state.gameScores??{})){
+      if(gs.awayAbbr===abbr||gs.homeAbbr===abbr) return gs;
+    }
+  }
+  return null;
+}
 function normalize(s){
   return String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z\s]/gi,' ').toLowerCase()
