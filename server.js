@@ -181,55 +181,139 @@ async function ensurePlayerDB() {
 }
 
 // ─── Slots persistence ─────────────────────────────────────────────────────────
-let slots = {
-  1: {},
-  2: {},
-  3: {},
-  4: {},
-  5: {}
-};
+//
+// When GITHUB_TOKEN + GITHUB_REPO are set (e.g. on Render), slots are read from
+// and written back to GitHub so they survive container restarts/redeploys.
+// Falls back to local filesystem (SLOTS_FILE) when those env vars are absent,
+// which keeps local dev working exactly as before.
+//
+// Required env vars on Render:
+//   GITHUB_TOKEN  — fine-grained PAT with Contents: read+write on this repo
+//   GITHUB_REPO   — "owner/repo-name"  e.g. "johnnyd/mlb-tracker"
+//   GITHUB_PATH   — path inside repo   e.g. "data/slots.json"  (default: "data/slots.json")
+//
+const GH_TOKEN  = process.env.GITHUB_TOKEN  || '';
+const GH_REPO   = process.env.GITHUB_REPO   || '';
+const GH_PATH   = process.env.GITHUB_PATH   || 'data/slots.json';
+const USE_GITHUB = !!(GH_TOKEN && GH_REPO);
 
-function loadSlots() {
-  for (let t = 1; t <= 5; t++) {
-    slots[t] = {};
-    SLOT_DEFS.forEach(d => { slots[t][d.id] = null; });
+// Cache the file's SHA so GitHub update calls don't have to re-fetch it every time.
+let ghFileSha = '';
+
+function githubFetch(method, body) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? Buffer.from(JSON.stringify(body)) : null;
+    const req = https.request({
+      hostname: 'api.github.com',
+      path: `/repos/${GH_REPO}/contents/${GH_PATH}`,
+      method,
+      headers: {
+        'Authorization': `Bearer ${GH_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'MLBFantasyTracker/4.0',
+        'Content-Type': 'application/json',
+        ...(payload ? { 'Content-Length': payload.length } : {}),
+      },
+    }, res => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) }); }
+        catch(e) { reject(e); }
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+let slots = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
+
+function applyRaw(raw) {
+  const isOldFormat = Object.keys(raw).some(key => SLOT_DEFS.some(d => d.id === key)) && !raw['1'];
+  if (isOldFormat) {
+    console.log('[loadSlots] Migrating old format → Team 1');
+    SLOT_DEFS.forEach(d => { if (raw[d.id] !== undefined) slots[1][d.id] = raw[d.id]; });
+    saveSlots();
+  } else {
+    for (let t = 1; t <= 5; t++) {
+      if (!raw[t]) continue;
+      SLOT_DEFS.forEach(d => { if (raw[t][d.id] !== undefined) slots[t][d.id] = raw[t][d.id]; });
+      if (raw[t].teamName) slots[t].teamName = raw[t].teamName;
+    }
   }
+}
+
+async function loadSlots() {
+  for (let t = 1; t <= 5; t++) { slots[t] = {}; SLOT_DEFS.forEach(d => { slots[t][d.id] = null; }); }
+
+  if (USE_GITHUB) {
+    try {
+      console.log(`[loadSlots] Fetching from GitHub: ${GH_REPO}/${GH_PATH}`);
+      const { status, body } = await githubFetch('GET');
+      if (status === 200 && body.content) {
+        ghFileSha = body.sha;
+        const raw = JSON.parse(Buffer.from(body.content.replace(/\n/g,''), 'base64').toString('utf8'));
+        applyRaw(raw);
+        console.log('[loadSlots] Loaded from GitHub ✓');
+        return;
+      }
+      if (status === 404) {
+        console.log('[loadSlots] slots.json not found on GitHub — will create on first save');
+        return;
+      }
+      console.warn(`[loadSlots] GitHub returned ${status}`, body?.message);
+    } catch(e) {
+      console.error('[loadSlots] GitHub fetch failed:', e.message);
+    }
+  }
+
+  // Local fallback
   try {
     if (fs.existsSync(SLOTS_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(SLOTS_FILE, 'utf8'));
-      // Check if it's old format (directly keys of slots like "C1")
-      const isOldFormat = Object.keys(raw).some(key => SLOT_DEFS.some(d => d.id === key)) && !raw["1"];
-      
-      if (isOldFormat) {
-        console.log("[Migration] Migrating old slots.json format to multi-team format (Team 1)");
-        SLOT_DEFS.forEach(d => {
-          if (raw[d.id] !== undefined) slots[1][d.id] = raw[d.id];
-        });
-        saveSlots();
-      } else {
-        for (let t = 1; t <= 5; t++) {
-          if (raw[t]) {
-            SLOT_DEFS.forEach(d => {
-              if (raw[t][d.id] !== undefined) slots[t][d.id] = raw[t][d.id];
-            });
-            if (raw[t].teamName) {
-              slots[t].teamName = raw[t].teamName;
-            }
-          }
-        }
-      }
+      applyRaw(JSON.parse(fs.readFileSync(SLOTS_FILE, 'utf8')));
+      console.log('[loadSlots] Loaded from local file ✓');
     }
-  } catch(e) {
-    console.error("[loadSlots] Error:", e);
-  }
+  } catch(e) { console.error('[loadSlots] Local load error:', e.message); }
 }
 
+// Debounce rapid consecutive saves (e.g. bulk enrichment) so we don't hammer the GitHub API.
+let saveTimer = null;
 function saveSlots() {
-  fs.mkdirSync(DATA_DIR,{recursive:true});
-  fs.writeFileSync(SLOTS_FILE, JSON.stringify(slots,null,2));
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(_flushSave, 1500);
 }
 
-loadSlots();
+async function _flushSave() {
+  saveTimer = null;
+  const content = JSON.stringify(slots, null, 2);
+
+  if (USE_GITHUB) {
+    try {
+      const encoded = Buffer.from(content).toString('base64');
+      const body = { message: 'chore: update slots.json', content: encoded };
+      if (ghFileSha) body.sha = ghFileSha;
+      const { status, body: resp } = await githubFetch('PUT', body);
+      if (status === 200 || status === 201) {
+        ghFileSha = resp.content?.sha || ghFileSha;
+        console.log('[saveSlots] Saved to GitHub ✓');
+        return;
+      }
+      console.warn(`[saveSlots] GitHub returned ${status}:`, resp?.message);
+    } catch(e) {
+      console.error('[saveSlots] GitHub save failed:', e.message);
+    }
+  }
+
+  // Local fallback
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(SLOTS_FILE, content);
+  } catch(e) { console.error('[saveSlots] Local save error:', e.message); }
+}
 
 function getTrackedPlayers() {
   const players=[], seen=new Set();
@@ -1252,5 +1336,5 @@ app.listen(PORT,()=>{
   const cmd=process.platform==='win32'?`start "" "${url}"`:process.platform==='darwin'?`open "${url}"`:` xdg-open "${url}"`;
   exec(cmd,err=>{if(err)console.log('  Open:',url);});
   console.log("[PlayerDB] STARTING LOAD");
-  ensurePlayerDB().then(()=>setTimeout(runPoll,1500));
+  loadSlots().then(() => ensurePlayerDB()).then(()=>setTimeout(runPoll,1500));
 });
